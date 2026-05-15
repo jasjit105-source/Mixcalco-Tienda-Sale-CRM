@@ -84,6 +84,8 @@ corteLeona:()=>"SELECT numeroCorte,corte,cadenaSalida,ISNULL(totalVentas,0) AS t
 styleAnalysis:(arts)=>"SELECT C.Articulo,C.Store,SUM(C.Cantidad) AS Qty,ROUND(SUM(C.Cantidad*C.Precio_Venta),0) AS Revenue,ROUND(SUM(ISNULL(C.Costo,0)*C.Cantidad),0) AS TotalCost,ROUND(SUM((C.Precio_Venta-ISNULL(C.Costo,0))*C.Cantidad),0) AS Profit,ROUND(CASE WHEN SUM(C.Cantidad*C.Precio_Venta)=0 THEN 0 ELSE 100.0*SUM((C.Precio_Venta-ISNULL(C.Costo,0))*C.Cantidad)/SUM(C.Cantidad*C.Precio_Venta) END,1) AS MarginPct FROM(SELECT LEFT(M.Articulo,CHARINDEX('-',M.Articulo+'-')-1) AS Articulo,M.Cantidad,M.Precio_Venta,ISNULL(CC.Costo,0) AS Costo,'Circunvalacion' AS Store FROM MOVS_CIRCUNVALACION M LEFT JOIN SAP_CC CC ON CC.Articulo=M.Articulo WHERE M.FECHA BETWEEN '{{fecha1}}' AND '{{fecha2}}' AND M.Movimiento='TK' UNION ALL SELECT LEFT(M.Articulo,CHARINDEX('-',M.Articulo+'-')-1),M.Cantidad,M.Precio_Venta,ISNULL(CC.Costo,0),'Leona' FROM MOVS_LEONA M LEFT JOIN SAP_CC CC ON CC.Articulo=M.Articulo WHERE M.FECHA BETWEEN '{{fecha1}}' AND '{{fecha2}}' AND M.Movimiento='TK' UNION ALL SELECT LEFT(M.Articulo,CHARINDEX('-',M.Articulo+'-')-1),M.Cantidad,M.Precio_Venta,ISNULL(CC.Costo,0),'Lecumberri' FROM MOVS_LECUMBERRI M LEFT JOIN SAP_CC CC ON CC.Articulo=M.Articulo WHERE M.FECHA BETWEEN '{{fecha1}}' AND '{{fecha2}}' AND M.Movimiento='TK' UNION ALL SELECT LEFT(M.Articulo,CHARINDEX('-',M.Articulo+'-')-1),M.Cantidad,M.Precio_Venta,ISNULL(CC.Costo,0),'Chinconcuac' FROM MOVS_CHINCONCUAC M LEFT JOIN SAP_CC CC ON CC.Articulo=M.Articulo WHERE M.FECHA BETWEEN '{{fecha1}}' AND '{{fecha2}}' AND M.Movimiento='TK')C WHERE C.Articulo IN("+arts+") GROUP BY C.Articulo,C.Store ORDER BY C.Articulo,C.Store",
 
 styleInventory:(arts)=>"SELECT I.Articulo,SUM(CASE WHEN I.Store='Circunvalacion' THEN I.EXISTENCIA ELSE 0 END) AS Cercu,SUM(CASE WHEN I.Store='Leona' THEN I.EXISTENCIA ELSE 0 END) AS Leona,SUM(CASE WHEN I.Store='Lecumberri' THEN I.EXISTENCIA ELSE 0 END) AS Lecum,SUM(CASE WHEN I.Store='Chinconcuac' THEN I.EXISTENCIA ELSE 0 END) AS Chinco,SUM(CASE WHEN I.Store='Bodega' THEN I.EXISTENCIA ELSE 0 END) AS Bodega,SUM(I.EXISTENCIA) AS Total FROM(SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) AS Articulo,EXISTENCIA,'Circunvalacion' AS Store FROM PRODS_C UNION ALL SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1),EXISTENCIA,'Leona' FROM PRODS_L UNION ALL SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1),EXISTENCIA,'Lecumberri' FROM PRODS_LECU UNION ALL SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1),EXISTENCIA,'Chinconcuac' FROM PRODS_CHIN UNION ALL SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1),EXISTENCIA,'Bodega' FROM SAP_CC)I WHERE I.Articulo IN("+arts+") GROUP BY I.Articulo ORDER BY I.Articulo",
+
+fbAds:(art)=>"WITH AllSales AS (SELECT 'Circunvalacion' AS Store,M.FECHA,M.NO_REFEREN,M.Articulo,M.Cantidad,M.Precio_Venta,ISNULL(C.Costo,0) AS Cost FROM MOVS_CIRCUNVALACION M LEFT JOIN SAP_CC C ON C.Articulo=M.Articulo WHERE M.FECHA>='{{fecha1}}' AND M.FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT 'Leona Vicario',M.FECHA,M.NO_REFEREN,M.Articulo,M.Cantidad,M.Precio_Venta,ISNULL(C.Costo,0) FROM MOVS_LEONA M LEFT JOIN SAP_CC C ON C.Articulo=M.Articulo WHERE M.FECHA>='{{fecha1}}' AND M.FECHA<DATEADD(DAY,1,'{{fecha2}}')),TicketsWithItem AS (SELECT DISTINCT Store,FECHA,NO_REFEREN FROM AllSales WHERE Articulo='"+art+"'),TicketTotals AS (SELECT a.Store,a.FECHA,a.NO_REFEREN AS TicketNumber,SUM(a.Cantidad) AS TotalPCS,ROUND(SUM(a.Cantidad*a.Precio_Venta),0) AS TicketTotal,ROUND(SUM((a.Precio_Venta-a.Cost)*a.Cantidad),0) AS TicketProfit,CAST(CASE WHEN SUM(a.Cantidad*a.Precio_Venta)=0 THEN 0 ELSE ROUND(100.0*SUM((a.Precio_Venta-a.Cost)*a.Cantidad)/SUM(a.Cantidad*a.Precio_Venta),2)END AS DECIMAL(10,2)) AS ProfitPercentage FROM AllSales a INNER JOIN TicketsWithItem t ON a.Store=t.Store AND a.FECHA=t.FECHA AND a.NO_REFEREN=t.NO_REFEREN GROUP BY a.Store,a.FECHA,a.NO_REFEREN) SELECT Store,CONVERT(VARCHAR(10),FECHA,23) AS Fecha,TicketNumber,TotalPCS,TicketTotal,TicketProfit,ProfitPercentage,1 AS SortOrder FROM TicketTotals UNION ALL SELECT Store+' TOTAL',NULL,NULL,SUM(TotalPCS),ROUND(SUM(TicketTotal),0),ROUND(SUM(TicketProfit),0),CAST(CASE WHEN SUM(TicketTotal)=0 THEN 0 ELSE ROUND(100.0*SUM(TicketProfit)/SUM(TicketTotal),2)END AS DECIMAL(10,2)),2 FROM TicketTotals GROUP BY Store UNION ALL SELECT 'GRAND TOTAL',NULL,NULL,SUM(TotalPCS),ROUND(SUM(TicketTotal),0),ROUND(SUM(TicketProfit),0),CAST(CASE WHEN SUM(TicketTotal)=0 THEN 0 ELSE ROUND(100.0*SUM(TicketProfit)/SUM(TicketTotal),2)END AS DECIMAL(10,2)),3 FROM TicketTotals ORDER BY SortOrder,Store,FECHA,TicketNumber",
 };
 
 /* COLORS */
@@ -309,7 +311,7 @@ var s27=st(null),corteReceipt=s27[0],setCorteReceipt=s27[1];
 
 var fd=fmtD(date);
 var stores=["Circunvalacion","Jazmin","Leona Vicario","Lucumberri","Chinconcuac"];
-var tabs=[{id:"overview",l:"Resumen"},{id:"tickets",l:"Tickets"},{id:"items",l:"Top Art\u00edculos"},{id:"report",l:"Reporte Ventas"},{id:"yazmin",l:"Jazmin CRM"},{id:"inventory",l:"Inventario"},{id:"kardex",l:"Kardex"},{id:"deposits",l:"Dep\u00f3sitos"},{id:"corte",l:"Corte de Caja"},{id:"styles",l:"An\u00e1lisis Estilos"}];
+var tabs=[{id:"overview",l:"Resumen"},{id:"tickets",l:"Tickets"},{id:"items",l:"Top Art\u00edculos"},{id:"report",l:"Reporte Ventas"},{id:"yazmin",l:"Jazmin CRM"},{id:"inventory",l:"Inventario"},{id:"kardex",l:"Kardex"},{id:"deposits",l:"Dep\u00f3sitos"},{id:"corte",l:"Corte de Caja"},{id:"styles",l:"An\u00e1lisis Estilos"},{id:"fbads",l:"Facebook Ads"}];
 
 var qStore=useQuery(SQL.storeSummary(),{fecha:fd},[fd]);
 var qTop=useQuery(SQL.topItems(),{fecha:fd},[fd,"items"]);
@@ -329,6 +331,23 @@ var s36=st(false),styleLoading=s36[0],setStyleLoading=s36[1];
 var s37=st(null),styleErr=s37[0],setStyleErr=s37[1];
 var s38=st(date),styleFrom=s38[0],setStyleFrom=s38[1];
 var s39=st(date),styleTo=s39[0],setStyleTo=s39[1];
+
+var s40=st(""),fbArt=s40[0],setFbArt=s40[1];
+var s41=st(new Date(Date.now()-30*86400000).toISOString().slice(0,10)),fbFrom=s41[0],setFbFrom=s41[1];
+var s42=st(date),fbTo=s42[0],setFbTo=s42[1];
+var s43=st(null),fbData=s43[0],setFbData=s43[1];
+var s44=st(false),fbLoading=s44[0],setFbLoading=s44[1];
+var s45=st(null),fbErr=s45[0],setFbErr=s45[1];
+
+var doFbAds=function(){
+  var art=fbArt.trim().toUpperCase();
+  if(!art){setFbErr("Ingresa un código de artículo");return}
+  setFbLoading(true);setFbErr(null);setFbData(null);
+  var f1=fmtD(fbFrom),f2=fmtD(fbTo);
+  runQuery(SQL.fbAds(art),{fecha1:f1,fecha2:f2}).then(function(r){
+    setFbData(r||[]);setFbLoading(false);
+  }).catch(function(e){setFbErr(e.message);setFbLoading(false)});
+};
 
 var runStyleAnalysis=function(){
   var raw=styleInput.trim();if(!raw){setStyleErr("Ingresa estilos o sube un CSV");return}
@@ -641,6 +660,53 @@ tab==="styles"&&h(Panel,null,
     h("label",{style:{fontSize:10,color:T.pr,display:"block",marginBottom:4,fontWeight:700,textTransform:"uppercase"}},"Estilos (uno por l\u00ednea, o separados por comas)"),
     h("textarea",{value:styleInput,onChange:function(e){setStyleInput(e.target.value)},placeholder:"1234BA\n5678TU\n9012VE\n\n...o sube un archivo CSV",rows:5,style:{width:"100%",padding:12,border:"1.5px solid "+T.border,borderRadius:12,fontSize:13,fontFamily:"'JetBrains Mono',monospace",resize:"vertical",outline:"none",boxSizing:"border-box"}})),
   styleLoading?h(Loading):styleErr?h(Err,{msg:styleErr}):styleData?h(StyleReport,{data:styleData,inv:styleInvData}):null),
+
+tab==="fbads"&&h(Panel,null,
+  h(SH,{icon:Ic.Trd,title:"Facebook Ads Tracking",sub:"Impacto de artículos publicitados en ventas por tienda",gradient:"linear-gradient(135deg,#3b82f6,#2563eb)"}),
+  h("div",{style:{display:"flex",gap:16,flexWrap:"wrap",marginBottom:20,alignItems:"flex-end"}},
+    h("div",{style:{flex:"1 1 200px",maxWidth:260}},
+      h("label",{style:{fontSize:10,color:T.pr,display:"block",marginBottom:4,fontWeight:700,textTransform:"uppercase"}},"Artículo Publicitado"),
+      h("input",{type:"text",value:fbArt,onChange:function(e){setFbArt(e.target.value)},onKeyDown:function(e){if(e.key==="Enter")doFbAds()},placeholder:"Ej: 1234BA",style:{padding:"8px 14px",border:"1px solid "+T.border,borderRadius:10,fontSize:13,fontFamily:"'JetBrains Mono',monospace",width:"100%",boxSizing:"border-box"}})),
+    h("div",null,h("label",{style:{fontSize:10,color:T.pr,display:"block",marginBottom:4,fontWeight:700,textTransform:"uppercase"}},"Desde"),h("input",{type:"date",value:fbFrom,onChange:function(e){setFbFrom(e.target.value)},style:{padding:"8px 14px",border:"1px solid "+T.border,borderRadius:10,fontSize:13,fontFamily:"inherit"}})),
+    h("div",null,h("label",{style:{fontSize:10,color:T.pr,display:"block",marginBottom:4,fontWeight:700,textTransform:"uppercase"}},"Hasta"),h("input",{type:"date",value:fbTo,onChange:function(e){setFbTo(e.target.value)},style:{padding:"8px 14px",border:"1px solid "+T.border,borderRadius:10,fontSize:13,fontFamily:"inherit"}})),
+    h("button",{onClick:doFbAds,style:{background:"linear-gradient(135deg,#3b82f6,#2563eb)",color:"#fff",border:"none",borderRadius:12,padding:"10px 24px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(59,130,246,.3)"}},"🔍 Buscar")),
+  fbLoading?h(Loading):fbErr?h(Err,{msg:fbErr}):fbData?(function(){
+    var grand=fbData.find(function(r){return r.SortOrder===3});
+    var storeTotals=fbData.filter(function(r){return r.SortOrder===2});
+    var tickets=fbData.filter(function(r){return r.SortOrder===1});
+    if(!tickets.length)return h("div",{style:{textAlign:"center",padding:44,color:T.tt,fontSize:13}},"No se encontraron tickets con este artículo");
+    return h("div",null,
+      grand&&h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:16,marginBottom:24}},
+        h(KPI,{icon:Ic.Dol,label:"Venta Total",value:fmt(grand.TicketTotal),sub:fN(grand.TotalPCS)+" piezas en tickets con el artículo",kpiStyle:0,delay:1}),
+        h(KPI,{icon:Ic.Trd,label:"Utilidad Total",value:fmt(grand.TicketProfit),sub:"Ganancia neta de tickets generados",kpiStyle:1,delay:2}),
+        h(KPI,{icon:Ic.Bar,label:"Margen Promedio",value:grand.ProfitPercentage+"%",sub:"Porcentaje de utilidad sobre ventas",kpiStyle:2,delay:3}),
+        h(KPI,{icon:Ic.Cart,label:"Total Tickets",value:fN(tickets.length),sub:storeTotals.length+" tiendas con ventas",kpiStyle:3,delay:4})),
+      storeTotals.length>0&&h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:16,marginBottom:24}},
+        storeTotals.map(function(st2,i){
+          var sName=st2.Store.replace(" TOTAL","");
+          var sTickets=tickets.filter(function(t){return t.Store===sName});
+          var cl=SC[i%SC.length];
+          return h("div",{key:i,className:"fu fu"+(i+1),style:{background:"rgba(255,255,255,.85)",backdropFilter:"blur(12px)",borderRadius:16,padding:20,border:"1px solid "+T.border,boxShadow:"0 4px 20px rgba(0,0,0,.04)"}},
+            h("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:12}},
+              h("div",{style:{width:10,height:10,borderRadius:"50%",background:cl}}),
+              h("span",{style:{fontSize:14,fontWeight:700,color:T.tx}},sName)),
+            h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}},
+              h("div",null,h("div",{style:{fontSize:10,color:T.tt,textTransform:"uppercase",fontWeight:600}},"Venta"),h("div",{style:{fontSize:18,fontWeight:700,color:cl}},fmt(st2.TicketTotal))),
+              h("div",null,h("div",{style:{fontSize:10,color:T.tt,textTransform:"uppercase",fontWeight:600}},"Utilidad"),h("div",{style:{fontSize:18,fontWeight:700,color:T.gn}},fmt(st2.TicketProfit))),
+              h("div",null,h("div",{style:{fontSize:10,color:T.tt,textTransform:"uppercase",fontWeight:600}},"Tickets"),h("div",{style:{fontSize:18,fontWeight:700,color:T.tx}},fN(sTickets.length))),
+              h("div",null,h("div",{style:{fontSize:10,color:T.tt,textTransform:"uppercase",fontWeight:600}},"Margen"),h(PBadge,{value:st2.ProfitPercentage}))))
+        })),
+      h(SH,{icon:Ic.Cart,title:"Detalle de Tickets",sub:"Todos los tickets que contienen el artículo publicitado",gradient:"linear-gradient(135deg,#6366f1,#818cf8)"}),
+      h(DT,{columns:[
+        {header:"Tienda",key:"Store",bold:true},
+        {header:"Fecha",key:"Fecha"},
+        {header:"Ticket",key:"TicketNumber",mono:true,color:function(){return T.pr}},
+        {header:"Piezas",key:"TotalPCS",align:"right",bold:true},
+        {header:"Venta",align:"right",bold:true,render:function(r){return fmt(r.TicketTotal)}},
+        {header:"Utilidad",align:"right",render:function(r){return fmt(r.TicketProfit)},color:function(){return T.gn}},
+        {header:"Margen",align:"right",render:function(r){return h(PBadge,{value:r.ProfitPercentage})}}
+      ],data:tickets,empty:"Sin tickets"}))
+  })():null),
 
 // FOOTER
 h("footer",{style:{marginTop:40,paddingTop:18,borderTop:"1px solid "+T.bL,display:"flex",justifyContent:"space-between",alignItems:"center"}},h("span",{style:{fontSize:11,color:T.tt}},"Sahiba Centro Dashboard \u00b7 LIVE \u00b7 "+date),h("div",{style:{display:"flex",alignItems:"center",gap:8}},h("div",{style:{width:8,height:8,borderRadius:"50%",background:qStore.error?"#ef4444":"#10b981"}}),h("span",{style:{fontSize:11,color:qStore.error?T.rd:T.gn,fontWeight:600}},qStore.error?"Desconectado":"Conectado"))))
