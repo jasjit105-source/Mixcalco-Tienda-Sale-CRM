@@ -433,12 +433,13 @@ var loadTickets=cb(function(){setTicketLoading(true);
 },[fd]);
 useEffect(function(){if(tab==="tickets")loadTickets();},[tab,fd]);
 
-var doLookup=cb(function(ticket,store){
+var doLookup=cb(function(ticket,store,fecha){
   setDetailLoading(true);setShowDetail({ticket:ticket,store:store});
+  var useDate=fecha||fd;
   (async function(){try{
     var found=null;
-    if(store){found=await runQuery(SQL.ticketDetail(null,ticket,store),{fecha:fd})}
-    else{for(var i=0;i<stores.length;i++){var r=await runQuery(SQL.ticketDetail(null,ticket,stores[i]),{fecha:fd});if(r&&r.length){found=r;break;}}}
+    if(store){found=await runQuery(SQL.ticketDetail(null,ticket,store),{fecha:useDate})}
+    else{for(var i=0;i<stores.length;i++){var r=await runQuery(SQL.ticketDetail(null,ticket,stores[i]),{fecha:useDate});if(r&&r.length){found=r;break;}}}
     setDetailData(found||[]);
   }catch(e){setDetailData([])}setDetailLoading(false)})();
 },[fd]);
@@ -731,7 +732,7 @@ tab==="fbads"&&h(Panel,null,
       h(DT,{columns:[
         {header:"Tienda",key:"Store",bold:true},
         {header:"Fecha",key:"Fecha"},
-        {header:"Ticket",key:"TicketNumber",mono:true,render:function(r){return h("span",{onClick:function(){doLookup(String(r.TicketNumber),r.Store);setTab("tickets")},style:{color:T.pr,cursor:"pointer",fontWeight:700,textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:3}},r.TicketNumber)}},
+        {header:"Ticket",key:"TicketNumber",mono:true,render:function(r){return h("span",{onClick:function(){doLookup(String(r.TicketNumber),r.Store,r.Fecha);setTab("tickets")},style:{color:T.pr,cursor:"pointer",fontWeight:700,textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:3}},r.TicketNumber)}},
         {header:"Piezas",key:"TotalPCS",align:"right",bold:true},
         {header:"Venta",align:"right",bold:true,render:function(r){return fmt(r.TicketTotal)}},
         {header:"Utilidad",align:"right",render:function(r){return fmt(r.TicketProfit)},color:function(){return T.gn}},
