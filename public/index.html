@@ -367,11 +367,22 @@ var s38=st(date),styleFrom=s38[0],setStyleFrom=s38[1];
 var s39=st(date),styleTo=s39[0],setStyleTo=s39[1];
 
 var s40=st(""),fbArt=s40[0],setFbArt=s40[1];
-var s41=st(new Date(Date.now()-30*86400000).toISOString().slice(0,10)),fbFrom=s41[0],setFbFrom=s41[1];
+var s41=st(date),fbFrom=s41[0],setFbFrom=s41[1];
 var s42=st(date),fbTo=s42[0],setFbTo=s42[1];
 var s43=st(null),fbData=s43[0],setFbData=s43[1];
 var s44=st(false),fbLoading=s44[0],setFbLoading=s44[1];
 var s45=st(null),fbErr=s45[0],setFbErr=s45[1];
+var FB_TRACKED=["126OB","130OB"];
+var s46=st(null),fbTData=s46[0],setFbTData=s46[1];
+var s47=st(false),fbTLoad=s47[0],setFbTLoad=s47[1];
+
+var loadFbTracked=function(){
+  setFbTLoad(true);setFbTData(null);
+  var f1=fmtD(fbFrom),f2=fmtD(fbTo);
+  Promise.all(FB_TRACKED.map(function(art){return runQuery(SQL.fbAds(art),{fecha1:f1,fecha2:f2})})).then(function(res){
+    var obj={};FB_TRACKED.forEach(function(art,i){obj[art]=res[i]||[]});setFbTData(obj);setFbTLoad(false);
+  }).catch(function(){setFbTLoad(false)});
+};
 
 var doFbAds=function(){
   var art=fbArt.trim().toUpperCase();
@@ -435,6 +446,7 @@ var loadTickets=cb(function(){setTicketLoading(true);
   }).catch(function(){setTicketLoading(false)});
 },[fd]);
 useEffect(function(){if(tab==="tickets")loadTickets();},[tab,fd]);
+useEffect(function(){if(tab==="fbads"&&!fbTData&&!fbTLoad)loadFbTracked();},[tab]);
 
 var doLookup=cb(function(ticket,store){
   setDetailLoading(true);setShowDetail({ticket:ticket,store:store});
@@ -697,43 +709,31 @@ tab==="styles"&&h(Panel,null,
     h("textarea",{value:styleInput,onChange:function(e){setStyleInput(e.target.value)},placeholder:"1234BA\n5678TU\n9012VE\n\n...o sube un archivo CSV",rows:5,style:{width:"100%",padding:12,border:"1.5px solid "+T.border,borderRadius:12,fontSize:13,fontFamily:"'JetBrains Mono',monospace",resize:"vertical",outline:"none",boxSizing:"border-box"}})),
   styleLoading?h(Loading):styleErr?h(Err,{msg:styleErr}):styleData?h(StyleReport,{data:styleData,inv:styleInvData}):null),
 
-tab==="fbads"&&h(Panel,null,
-  h(SH,{icon:Ic.Trd,title:"Facebook Ads Tracking",sub:"Impacto de artículos publicitados en ventas por tienda",gradient:"linear-gradient(135deg,#3b82f6,#2563eb)"}),
-  h("div",{style:{display:"flex",gap:16,flexWrap:"wrap",marginBottom:20,alignItems:"flex-end"}},
-    h("div",{style:{flex:"1 1 200px",maxWidth:260}},
-      h("label",{style:{fontSize:10,color:T.pr,display:"block",marginBottom:4,fontWeight:700,textTransform:"uppercase"}},"Artículo Publicitado"),
-      h("input",{type:"text",value:fbArt,onChange:function(e){setFbArt(e.target.value)},onKeyDown:function(e){if(e.key==="Enter")doFbAds()},placeholder:"Ej: 1234BA",style:{padding:"8px 14px",border:"1px solid "+T.border,borderRadius:10,fontSize:13,fontFamily:"'JetBrains Mono',monospace",width:"100%",boxSizing:"border-box"}})),
-    h("div",null,h("label",{style:{fontSize:10,color:T.pr,display:"block",marginBottom:4,fontWeight:700,textTransform:"uppercase"}},"Desde"),h("input",{type:"date",value:fbFrom,onChange:function(e){setFbFrom(e.target.value)},style:{padding:"8px 14px",border:"1px solid "+T.border,borderRadius:10,fontSize:13,fontFamily:"inherit"}})),
-    h("div",null,h("label",{style:{fontSize:10,color:T.pr,display:"block",marginBottom:4,fontWeight:700,textTransform:"uppercase"}},"Hasta"),h("input",{type:"date",value:fbTo,onChange:function(e){setFbTo(e.target.value)},style:{padding:"8px 14px",border:"1px solid "+T.border,borderRadius:10,fontSize:13,fontFamily:"inherit"}})),
-    h("button",{onClick:doFbAds,style:{background:"linear-gradient(135deg,#3b82f6,#2563eb)",color:"#fff",border:"none",borderRadius:12,padding:"10px 24px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(59,130,246,.3)"}},"🔍 Buscar")),
-  fbLoading?h(Loading):fbErr?h(Err,{msg:fbErr}):fbData?(function(){
-    var grand=fbData.find(function(r){return r.SortOrder===3});
-    var storeTotals=fbData.filter(function(r){return r.SortOrder===2});
-    var tickets=fbData.filter(function(r){return r.SortOrder===1});
-    if(!tickets.length)return h("div",{style:{textAlign:"center",padding:44,color:T.tt,fontSize:13}},"No se encontraron tickets con este artículo");
-    return h("div",null,
-      grand&&h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:16,marginBottom:24}},
-        h(KPI,{icon:Ic.Dol,label:"Venta Total",value:fmt(grand.TicketTotal),sub:fN(grand.TotalPCS)+" piezas en tickets con el artículo",kpiStyle:0,delay:1}),
-        h(KPI,{icon:Ic.Trd,label:"Utilidad Total",value:fmt(grand.TicketProfit),sub:"Ganancia neta de tickets generados",kpiStyle:1,delay:2}),
-        h(KPI,{icon:Ic.Bar,label:"Margen Promedio",value:grand.ProfitPercentage+"%",sub:"Porcentaje de utilidad sobre ventas",kpiStyle:2,delay:3}),
-        h(KPI,{icon:Ic.Cart,label:"Total Tickets",value:fN(tickets.length),sub:storeTotals.length+" tiendas con ventas",kpiStyle:3,delay:4})),
-      storeTotals.length>0&&h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:16,marginBottom:24}},
-        storeTotals.map(function(st2,i){
-          var sName=st2.Store.replace(" TOTAL","");
-          var sTickets=tickets.filter(function(t){return t.Store===sName});
-          var cl=SC[i%SC.length];
-          return h("div",{key:i,className:"fu fu"+(i+1),style:{background:"rgba(255,255,255,.85)",backdropFilter:"blur(12px)",borderRadius:16,padding:20,border:"1px solid "+T.border,boxShadow:"0 4px 20px rgba(0,0,0,.04)"}},
-            h("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:12}},
-              h("div",{style:{width:10,height:10,borderRadius:"50%",background:cl}}),
-              h("span",{style:{fontSize:14,fontWeight:700,color:T.tx}},sName)),
-            h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}},
-              h("div",null,h("div",{style:{fontSize:10,color:T.tt,textTransform:"uppercase",fontWeight:600}},"Venta"),h("div",{style:{fontSize:18,fontWeight:700,color:cl}},fmt(st2.TicketTotal))),
-              h("div",null,h("div",{style:{fontSize:10,color:T.tt,textTransform:"uppercase",fontWeight:600}},"Utilidad"),h("div",{style:{fontSize:18,fontWeight:700,color:T.gn}},fmt(st2.TicketProfit))),
-              h("div",null,h("div",{style:{fontSize:10,color:T.tt,textTransform:"uppercase",fontWeight:600}},"Tickets"),h("div",{style:{fontSize:18,fontWeight:700,color:T.tx}},fN(sTickets.length))),
-              h("div",null,h("div",{style:{fontSize:10,color:T.tt,textTransform:"uppercase",fontWeight:600}},"Margen"),h(PBadge,{value:st2.ProfitPercentage}))))
-        })),
-      h(SH,{icon:Ic.Cart,title:"Detalle de Tickets",sub:"Todos los tickets que contienen el artículo publicitado",gradient:"linear-gradient(135deg,#6366f1,#818cf8)"}),
+tab==="fbads"&&h(React.Fragment,null,
+h(Panel,null,
+  h(SH,{icon:Ic.Trd,title:"Estilos Promocionados",sub:"Rendimiento de artículos publicitados en Facebook Ads",gradient:"linear-gradient(135deg,#3b82f6,#2563eb)"}),
+  h("div",{style:{display:"flex",gap:14,flexWrap:"wrap",alignItems:"flex-end",marginBottom:20}},
+    h("div",null,h("label",{style:{fontSize:10,color:T.pr,display:"block",marginBottom:4,fontWeight:700,textTransform:"uppercase",letterSpacing:1}},"Desde"),h("input",{type:"date",value:fbFrom,onChange:function(e){setFbFrom(e.target.value)},style:{padding:"8px 14px",border:"1px solid "+T.border,borderRadius:10,fontSize:13,fontFamily:"inherit"}})),
+    h("div",null,h("label",{style:{fontSize:10,color:T.pr,display:"block",marginBottom:4,fontWeight:700,textTransform:"uppercase",letterSpacing:1}},"Hasta"),h("input",{type:"date",value:fbTo,onChange:function(e){setFbTo(e.target.value)},style:{padding:"8px 14px",border:"1px solid "+T.border,borderRadius:10,fontSize:13,fontFamily:"inherit"}})),
+    h("button",{onClick:loadFbTracked,style:{background:"linear-gradient(135deg,#3b82f6,#2563eb)",color:"#fff",border:"none",borderRadius:12,padding:"10px 24px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(59,130,246,.3)"}},"Actualizar")),
+  fbTLoad?h(Loading):fbTData?h(React.Fragment,null,
+    FB_TRACKED.map(function(art,ai){
+      var data=fbTData[art]||[];var grand=data.find(function(r){return r.SortOrder===3});var sts=data.filter(function(r){return r.SortOrder===2});var tix=data.filter(function(r){return r.SortOrder===1});var src=getStyleImg(art);var ac=KG[ai]||KG[0];
+      return h("div",{key:art,style:{marginBottom:24,padding:22,background:ac.bg,borderRadius:18,border:"1px solid "+T.border}},
+        h("div",{style:{display:"flex",alignItems:"center",gap:16,marginBottom:16}},
+          src?h("img",{src:src,onClick:function(){openStyleImage(art)},style:{width:68,height:95,objectFit:"cover",borderRadius:12,boxShadow:"0 4px 16px rgba(0,0,0,.12)",cursor:"pointer",border:"3px solid #fff"}}):h("div",{style:{width:68,height:95,borderRadius:12,background:"#e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:800,color:"#94a3b8"}},art.slice(0,3)),
+          h("div",null,h("h3",{style:{fontSize:22,fontWeight:800,color:T.tx,margin:0,letterSpacing:1}},art),h("p",{style:{fontSize:12,color:T.tt,margin:"4px 0 0"}},tix.length+" tickets · "+sts.length+" tiendas activas"))),
+        grand?h("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16}},
+          h("div",{style:{padding:"14px 18px",borderRadius:14,background:"rgba(255,255,255,.92)",boxShadow:"0 2px 8px rgba(0,0,0,.04)"}},h("div",{style:{fontSize:9,color:T.pu,fontWeight:700,textTransform:"uppercase",letterSpacing:1}},"Venta Total"),h("div",{style:{fontSize:22,fontWeight:800,color:T.tx,marginTop:4}},fmt(grand.TicketTotal))),
+          h("div",{style:{padding:"14px 18px",borderRadius:14,background:"rgba(255,255,255,.92)",boxShadow:"0 2px 8px rgba(0,0,0,.04)"}},h("div",{style:{fontSize:9,color:T.gn,fontWeight:700,textTransform:"uppercase",letterSpacing:1}},"Utilidad"),h("div",{style:{fontSize:22,fontWeight:800,color:T.gn,marginTop:4}},fmt(grand.TicketProfit))),
+          h("div",{style:{padding:"14px 18px",borderRadius:14,background:"rgba(255,255,255,.92)",boxShadow:"0 2px 8px rgba(0,0,0,.04)"}},h("div",{style:{fontSize:9,color:T.am,fontWeight:700,textTransform:"uppercase",letterSpacing:1}},"Margen"),h("div",{style:{fontSize:22,fontWeight:800,color:T.tx,marginTop:4}},grand.ProfitPercentage+"%")),
+          h("div",{style:{padding:"14px 18px",borderRadius:14,background:"rgba(255,255,255,.92)",boxShadow:"0 2px 8px rgba(0,0,0,.04)"}},h("div",{style:{fontSize:9,color:T.pr,fontWeight:700,textTransform:"uppercase",letterSpacing:1}},"Piezas"),h("div",{style:{fontSize:22,fontWeight:800,color:T.tx,marginTop:4}},fN(grand.TotalPCS)))
+        ):h("div",{style:{padding:24,textAlign:"center",color:T.tt,fontSize:13,background:"rgba(255,255,255,.6)",borderRadius:12}},"Sin ventas en este período"),
+        sts.length>0&&h("div",{style:{display:"flex",gap:10,flexWrap:"wrap"}},sts.map(function(st2,i){var cl=SC[i%SC.length];return h("div",{key:i,style:{flex:"1 1 200px",padding:"12px 16px",borderRadius:12,background:"rgba(255,255,255,.9)",border:"1px solid "+T.bL}},h("div",{style:{fontSize:12,fontWeight:700,color:cl,marginBottom:6}},st2.Store.replace(" TOTAL","")),h("div",{style:{display:"flex",gap:14,alignItems:"center"}},h("span",{style:{fontSize:14,fontWeight:700}},fmt(st2.TicketTotal)),h("span",{style:{fontSize:14,color:T.gn}},fmt(st2.TicketProfit)),h(PBadge,{value:st2.ProfitPercentage})))})))
+    }),
+    h("div",{style:{marginTop:8}},h(SH,{icon:Ic.Cart,title:"Detalle de Tickets",sub:"Todos los tickets de estilos promocionados",gradient:"linear-gradient(135deg,#6366f1,#818cf8)"}),
       h(DT,{columns:[
+        {header:"Estilo",render:function(r){return r._art},bold:true,color:function(){return T.pr}},
         {header:"Tienda",key:"Store",bold:true},
         {header:"Fecha",key:"Fecha"},
         {header:"Ticket",key:"TicketNumber",mono:true,color:function(){return T.pr}},
@@ -741,8 +741,22 @@ tab==="fbads"&&h(Panel,null,
         {header:"Venta",align:"right",bold:true,render:function(r){return fmt(r.TicketTotal)}},
         {header:"Utilidad",align:"right",render:function(r){return fmt(r.TicketProfit)},color:function(){return T.gn}},
         {header:"Margen",align:"right",render:function(r){return h(PBadge,{value:r.ProfitPercentage})}}
-      ],data:tickets,empty:"Sin tickets"}))
-  })():null),
+      ],data:FB_TRACKED.flatMap(function(art){return(fbTData[art]||[]).filter(function(r){return r.SortOrder===1}).map(function(r){return Object.assign({},r,{_art:art})})}),empty:"Sin tickets"}))
+  ):null),
+h(Panel,{style:{marginTop:16}},
+  h(SH,{icon:Ic.Sch,title:"Buscar Otro Artículo",sub:"Busca cualquier artículo para ver su impacto en ventas",gradient:"linear-gradient(135deg,#8b5cf6,#a78bfa)"}),
+  h("div",{style:{display:"flex",gap:14,flexWrap:"wrap",alignItems:"flex-end",marginBottom:16}},
+    h("div",{style:{flex:"1 1 200px",maxWidth:260}},h("label",{style:{fontSize:10,color:T.pr,display:"block",marginBottom:4,fontWeight:700,textTransform:"uppercase",letterSpacing:1}},"Artículo"),h("input",{type:"text",value:fbArt,onChange:function(e){setFbArt(e.target.value)},onKeyDown:function(e){if(e.key==="Enter")doFbAds()},placeholder:"Ej: 1234BA",style:{padding:"8px 14px",border:"1px solid "+T.border,borderRadius:10,fontSize:13,fontFamily:"'JetBrains Mono',monospace",width:"100%",boxSizing:"border-box"}})),
+    h("button",{onClick:doFbAds,style:{background:"linear-gradient(135deg,#8b5cf6,#a78bfa)",color:"#fff",border:"none",borderRadius:12,padding:"10px 24px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}},"Buscar")),
+  fbLoading?h(Loading):fbErr?h(Err,{msg:fbErr}):fbData?(function(){
+    var grand=fbData.find(function(r){return r.SortOrder===3});var storeTotals=fbData.filter(function(r){return r.SortOrder===2});var tickets=fbData.filter(function(r){return r.SortOrder===1});
+    if(!tickets.length)return h("div",{style:{textAlign:"center",padding:28,color:T.tt,fontSize:13}},"Sin tickets");
+    return h("div",null,grand&&h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:14,marginBottom:20}},
+      h(KPI,{icon:Ic.Dol,label:"Venta",value:fmt(grand.TicketTotal),sub:fN(grand.TotalPCS)+" pzas",kpiStyle:0,delay:1}),
+      h(KPI,{icon:Ic.Trd,label:"Utilidad",value:fmt(grand.TicketProfit),sub:grand.ProfitPercentage+"% margen",kpiStyle:1,delay:2}),
+      h(KPI,{icon:Ic.Cart,label:"Tickets",value:fN(tickets.length),sub:storeTotals.length+" tiendas",kpiStyle:3,delay:3})),
+    h(DT,{columns:[{header:"Tienda",key:"Store",bold:true},{header:"Fecha",key:"Fecha"},{header:"Ticket",key:"TicketNumber",mono:true,color:function(){return T.pr}},{header:"Pzas",key:"TotalPCS",align:"right"},{header:"Venta",align:"right",render:function(r){return fmt(r.TicketTotal)}},{header:"Utilidad",align:"right",render:function(r){return fmt(r.TicketProfit)},color:function(){return T.gn}},{header:"Margen",align:"right",render:function(r){return h(PBadge,{value:r.ProfitPercentage})}}],data:tickets}))
+  })():null)),
 
 // FOOTER
 h("footer",{style:{marginTop:40,paddingTop:18,borderTop:"1px solid "+T.bL,display:"flex",justifyContent:"space-between",alignItems:"center"}},h("span",{style:{fontSize:11,color:T.tt}},"Sahiba Centro Dashboard \u00b7 LIVE \u00b7 "+date),h("div",{style:{display:"flex",alignItems:"center",gap:8}},h("div",{style:{width:8,height:8,borderRadius:"50%",background:qStore.error?"#ef4444":"#10b981"}}),h("span",{style:{fontSize:11,color:qStore.error?T.rd:T.gn,fontWeight:600}},qStore.error?"Desconectado":"Conectado"))))
