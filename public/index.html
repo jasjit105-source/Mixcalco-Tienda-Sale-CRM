@@ -363,8 +363,8 @@ var s37=st(null),styleErr=s37[0],setStyleErr=s37[1];
 var s38=st(date),styleFrom=s38[0],setStyleFrom=s38[1];
 var s39=st(date),styleTo=s39[0],setStyleTo=s39[1];
 
-var s40=st(""),fbArt=s40[0],setFbArt=s40[1];
-var s41=st(new Date(Date.now()-30*86400000).toISOString().slice(0,10)),fbFrom=s41[0],setFbFrom=s41[1];
+var s40=st("126OB"),fbArt=s40[0],setFbArt=s40[1];
+var s41=st(date),fbFrom=s41[0],setFbFrom=s41[1];
 var s42=st(date),fbTo=s42[0],setFbTo=s42[1];
 var s43=st(null),fbData=s43[0],setFbData=s43[1];
 var s44=st(false),fbLoading=s44[0],setFbLoading=s44[1];
@@ -731,7 +731,7 @@ tab==="fbads"&&h(Panel,null,
       h(DT,{columns:[
         {header:"Tienda",key:"Store",bold:true},
         {header:"Fecha",key:"Fecha"},
-        {header:"Ticket",key:"TicketNumber",mono:true,color:function(){return T.pr}},
+        {header:"Ticket",key:"TicketNumber",mono:true,render:function(r){return h("span",{onClick:function(){doLookup(String(r.TicketNumber),r.Store);setTab("tickets")},style:{color:T.pr,cursor:"pointer",fontWeight:700,textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:3}},r.TicketNumber)}},
         {header:"Piezas",key:"TotalPCS",align:"right",bold:true},
         {header:"Venta",align:"right",bold:true,render:function(r){return fmt(r.TicketTotal)}},
         {header:"Utilidad",align:"right",render:function(r){return fmt(r.TicketProfit)},color:function(){return T.gn}},
