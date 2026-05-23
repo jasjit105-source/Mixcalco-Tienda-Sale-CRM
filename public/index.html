@@ -114,6 +114,8 @@ styleAnalysis:(arts)=>"SELECT C.Articulo,C.Store,SUM(C.Cantidad) AS Qty,ROUND(SU
 
 styleInventory:(arts)=>"SELECT I.Articulo,SUM(CASE WHEN I.Store='Circunvalacion' THEN I.EXISTENCIA ELSE 0 END) AS Cercu,SUM(CASE WHEN I.Store='Leona' THEN I.EXISTENCIA ELSE 0 END) AS Leona,SUM(CASE WHEN I.Store='Lecumberri' THEN I.EXISTENCIA ELSE 0 END) AS Lecum,SUM(CASE WHEN I.Store='Chinconcuac' THEN I.EXISTENCIA ELSE 0 END) AS Chinco,SUM(CASE WHEN I.Store='Bodega' THEN I.EXISTENCIA ELSE 0 END) AS Bodega,SUM(I.EXISTENCIA) AS Total FROM(SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) AS Articulo,EXISTENCIA,'Circunvalacion' AS Store FROM PRODS_C UNION ALL SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1),EXISTENCIA,'Leona' FROM PRODS_L UNION ALL SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1),EXISTENCIA,'Lecumberri' FROM PRODS_LECU UNION ALL SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1),EXISTENCIA,'Chinconcuac' FROM PRODS_CHIN UNION ALL SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1),EXISTENCIA,'Bodega' FROM SAP_CC)I WHERE I.Articulo IN("+arts+") GROUP BY I.Articulo ORDER BY I.Articulo",
 
+onlineSales:()=>{var base="(SELECT 'LEONA' AS Store,CAST(NO_REFEREN AS VARCHAR(50)) AS Ticket,CASE WHEN UPPER(Vendedor) LIKE '%JASMINE%' OR UPPER(Vendedor) LIKE '%JAZMIN%' THEN 'Jasmine Sale' ELSE 'Store Sale' END AS Sale_Type,ROUND(SUM(Cantidad*Precio_Venta),0) AS Total_Ticket FROM MOVS_LEONA WHERE FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') AND Movimiento='TK' AND CANAL IS NOT NULL AND LTRIM(RTRIM(CANAL))<>'' GROUP BY NO_REFEREN,Vendedor UNION ALL SELECT 'CERCU',CAST(NO_REFEREN AS VARCHAR(50)),CASE WHEN UPPER(Vendedor) LIKE '%JASMINE%' OR UPPER(Vendedor) LIKE '%JAZMIN%' THEN 'Jasmine Sale' ELSE 'Store Sale' END,ROUND(SUM(Cantidad*Precio_Venta),0) FROM MOVS_CIRCUNVALACION WHERE FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') AND Movimiento='TK' AND CANAL IS NOT NULL AND LTRIM(RTRIM(CANAL))<>'' GROUP BY NO_REFEREN,Vendedor)";return "SELECT Store,Sale_Type,Ticket,Total_Ticket,1 AS SortOrder FROM "+base+" a UNION ALL SELECT Store,Sale_Type,'TOTAL',SUM(Total_Ticket),2 FROM "+base+" b GROUP BY Store,Sale_Type UNION ALL SELECT 'GRAND TOTAL','ALL','TOTAL',SUM(Total_Ticket),3 FROM "+base+" c ORDER BY SortOrder,Store,Sale_Type,Ticket"},
+
 fbAds:(art)=>{var as="(SELECT 'Circunvalacion' AS Store,M.FECHA,M.NO_REFEREN,M.Articulo,M.Cantidad,M.Precio_Venta,ISNULL(C.Costo,0) AS Cost FROM MOVS_CIRCUNVALACION M LEFT JOIN SAP_CC C ON C.Articulo=M.Articulo WHERE M.FECHA>='{{fecha1}}' AND M.FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT 'Leona Vicario',M.FECHA,M.NO_REFEREN,M.Articulo,M.Cantidad,M.Precio_Venta,ISNULL(C.Costo,0) FROM MOVS_LEONA M LEFT JOIN SAP_CC C ON C.Articulo=M.Articulo WHERE M.FECHA>='{{fecha1}}' AND M.FECHA<DATEADD(DAY,1,'{{fecha2}}'))";var tw="(SELECT DISTINCT 'Circunvalacion' AS Store,FECHA,NO_REFEREN FROM MOVS_CIRCUNVALACION WHERE Articulo='"+art+"' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION SELECT DISTINCT 'Leona Vicario',FECHA,NO_REFEREN FROM MOVS_LEONA WHERE Articulo='"+art+"' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}'))";var tt="(SELECT a.Store,a.FECHA,a.NO_REFEREN AS TicketNumber,SUM(a.Cantidad) AS TotalPCS,ROUND(SUM(a.Cantidad*a.Precio_Venta),0) AS TicketTotal,ROUND(SUM((a.Precio_Venta-a.Cost)*a.Cantidad),0) AS TicketProfit,CAST(CASE WHEN SUM(a.Cantidad*a.Precio_Venta)=0 THEN 0 ELSE ROUND(100.0*SUM((a.Precio_Venta-a.Cost)*a.Cantidad)/SUM(a.Cantidad*a.Precio_Venta),2)END AS DECIMAL(10,2)) AS ProfitPercentage FROM "+as+" a INNER JOIN "+tw+" t ON a.Store=t.Store AND a.FECHA=t.FECHA AND a.NO_REFEREN=t.NO_REFEREN GROUP BY a.Store,a.FECHA,a.NO_REFEREN)";return "SELECT Store,CONVERT(VARCHAR(10),FECHA,23) AS Fecha,TicketNumber,TotalPCS,TicketTotal,TicketProfit,ProfitPercentage,1 AS SortOrder FROM "+tt+" x UNION ALL SELECT Store+' TOTAL',NULL,NULL,SUM(TotalPCS),ROUND(SUM(TicketTotal),0),ROUND(SUM(TicketProfit),0),CAST(CASE WHEN SUM(TicketTotal)=0 THEN 0 ELSE ROUND(100.0*SUM(TicketProfit)/SUM(TicketTotal),2)END AS DECIMAL(10,2)),2 FROM "+tt+" y GROUP BY Store UNION ALL SELECT 'GRAND TOTAL',NULL,NULL,SUM(TotalPCS),ROUND(SUM(TicketTotal),0),ROUND(SUM(TicketProfit),0),CAST(CASE WHEN SUM(TicketTotal)=0 THEN 0 ELSE ROUND(100.0*SUM(TicketProfit)/SUM(TicketTotal),2)END AS DECIMAL(10,2)),3 FROM "+tt+" z ORDER BY SortOrder,Store,Fecha,TicketNumber"},
 };
 
@@ -342,7 +344,7 @@ var s27=st(null),corteReceipt=s27[0],setCorteReceipt=s27[1];
 
 var fd=fmtD(date);
 var stores=["Circunvalacion","Jazmin","Leona Vicario","Lucumberri","Chinconcuac"];
-var tabs=[{id:"overview",l:"Resumen"},{id:"tickets",l:"Tickets"},{id:"items",l:"Top Art\u00edculos"},{id:"report",l:"Reporte Ventas"},{id:"yazmin",l:"Jazmin CRM"},{id:"inventory",l:"Inventario"},{id:"kardex",l:"Kardex"},{id:"deposits",l:"Dep\u00f3sitos"},{id:"corte",l:"Corte de Caja"},{id:"styles",l:"An\u00e1lisis Estilos"},{id:"fbads",l:"Facebook Ads"}];
+var tabs=[{id:"overview",l:"Resumen"},{id:"tickets",l:"Tickets"},{id:"items",l:"Top Art\u00edculos"},{id:"report",l:"Reporte Ventas"},{id:"yazmin",l:"Jazmin CRM"},{id:"inventory",l:"Inventario"},{id:"kardex",l:"Kardex"},{id:"deposits",l:"Dep\u00f3sitos"},{id:"corte",l:"Corte de Caja"},{id:"styles",l:"An\u00e1lisis Estilos"},{id:"fbads",l:"Facebook Ads"},{id:"online",l:"Online Sale"}];
 
 var qStore=useQuery(SQL.storeSummary(),{fecha:fd},[fd]);
 var qTop=useQuery(SQL.topItems(),{fecha:fd},[fd,"items"]);
@@ -369,6 +371,19 @@ var s42=st(date),fbTo=s42[0],setFbTo=s42[1];
 var s43=st(null),fbData=s43[0],setFbData=s43[1];
 var s44=st(false),fbLoading=s44[0],setFbLoading=s44[1];
 var s45=st(null),fbErr=s45[0],setFbErr=s45[1];
+
+var s50=st(date),olFrom=s50[0],setOlFrom=s50[1];
+var s51=st(date),olTo=s51[0],setOlTo=s51[1];
+var s52=st(null),olData=s52[0],setOlData=s52[1];
+var s53=st(false),olLoading=s53[0],setOlLoading=s53[1];
+var s54=st(null),olErr=s54[0],setOlErr=s54[1];
+
+var doOnlineSales=function(){
+  setOlLoading(true);setOlErr(null);setOlData(null);
+  runQuery(SQL.onlineSales(),{fecha1:fmtD(olFrom),fecha2:fmtD(olTo)}).then(function(r){
+    setOlData(r||[]);setOlLoading(false);
+  }).catch(function(e){setOlErr(e.message);setOlLoading(false)});
+};
 
 var doFbAds=function(){
   var art=fbArt.trim().toUpperCase();
@@ -432,6 +447,7 @@ var loadTickets=cb(function(){setTicketLoading(true);
   }).catch(function(){setTicketLoading(false)});
 },[fd]);
 useEffect(function(){if(tab==="tickets")loadTickets();},[tab,fd]);
+useEffect(function(){if(tab==="online"&&!olData&&!olLoading)doOnlineSales();},[tab]);
 
 var doLookup=cb(function(ticket,store,fecha){
   setDetailLoading(true);setShowDetail({ticket:ticket,store:store});
@@ -737,6 +753,48 @@ tab==="fbads"&&h(Panel,null,
         {header:"Venta",align:"right",bold:true,render:function(r){return fmt(r.TicketTotal)}},
         {header:"Utilidad",align:"right",render:function(r){return fmt(r.TicketProfit)},color:function(){return T.gn}},
         {header:"Margen",align:"right",render:function(r){return h(PBadge,{value:r.ProfitPercentage})}}
+      ],data:tickets,empty:"Sin tickets"}))
+  })():null),
+
+// ONLINE SALES
+tab==="online"&&h(Panel,null,
+  h(SH,{icon:Ic.Cart,title:"Ventas Online",sub:"Tickets con canal de venta en línea",gradient:"linear-gradient(135deg,#8b5cf6,#a78bfa)"}),
+  h("div",{style:{display:"flex",gap:16,flexWrap:"wrap",marginBottom:20,alignItems:"flex-end"}},
+    h("div",null,h("label",{style:{fontSize:10,color:T.pr,display:"block",marginBottom:4,fontWeight:700,textTransform:"uppercase"}},"Desde"),h("input",{type:"date",value:olFrom,onChange:function(e){setOlFrom(e.target.value)},style:{padding:"8px 14px",border:"1px solid "+T.border,borderRadius:10,fontSize:13,fontFamily:"inherit"}})),
+    h("div",null,h("label",{style:{fontSize:10,color:T.pr,display:"block",marginBottom:4,fontWeight:700,textTransform:"uppercase"}},"Hasta"),h("input",{type:"date",value:olTo,onChange:function(e){setOlTo(e.target.value)},style:{padding:"8px 14px",border:"1px solid "+T.border,borderRadius:10,fontSize:13,fontFamily:"inherit"}})),
+    h("button",{onClick:doOnlineSales,style:{background:"linear-gradient(135deg,#8b5cf6,#a78bfa)",color:"#fff",border:"none",borderRadius:12,padding:"10px 24px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(139,92,246,.3)"}},"Actualizar")),
+  olLoading?h(Loading):olErr?h(Err,{msg:olErr}):olData?(function(){
+    var grand=olData.find(function(r){return r.SortOrder===3});
+    var stTotals=olData.filter(function(r){return r.SortOrder===2});
+    var tickets=olData.filter(function(r){return r.SortOrder===1});
+    if(!tickets.length)return h("div",{style:{textAlign:"center",padding:44,color:T.tt,fontSize:13}},"No se encontraron ventas online en este periodo");
+    var jasmineTotal=stTotals.filter(function(r){return r.Sale_Type==="Jasmine Sale"}).reduce(function(s,r){return s+r.Total_Ticket},0);
+    var storeTotal=stTotals.filter(function(r){return r.Sale_Type==="Store Sale"}).reduce(function(s,r){return s+r.Total_Ticket},0);
+    var jasmineTickets=tickets.filter(function(r){return r.Sale_Type==="Jasmine Sale"}).length;
+    var storeTickets=tickets.filter(function(r){return r.Sale_Type==="Store Sale"}).length;
+    return h("div",null,
+      h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:16,marginBottom:24}},
+        h(KPI,{icon:Ic.Dol,label:"Total Online",value:fmt(grand?grand.Total_Ticket:0),sub:fN(tickets.length)+" tickets online",kpiStyle:0,delay:1}),
+        h(KPI,{icon:Ic.Usr,label:"Jasmine Sales",value:fmt(jasmineTotal),sub:fN(jasmineTickets)+" tickets",kpiStyle:3,delay:2}),
+        h(KPI,{icon:Ic.Cart,label:"Store Sales",value:fmt(storeTotal),sub:fN(storeTickets)+" tickets",kpiStyle:2,delay:3}),
+        h(KPI,{icon:Ic.Bar,label:"% Jasmine",value:grand&&grand.Total_Ticket>0?((jasmineTotal/grand.Total_Ticket)*100).toFixed(1)+"%":"0%",sub:"del total online",kpiStyle:1,delay:4})),
+      h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:16,marginBottom:24}},
+        stTotals.map(function(st2,i){
+          var cl=st2.Sale_Type==="Jasmine Sale"?T.pk:SC[i%SC.length];
+          var icon=st2.Sale_Type==="Jasmine Sale"?"👩‍💻":"🏪";
+          return h("div",{key:i,className:"fu fu"+(i+1),style:{background:"rgba(255,255,255,.85)",backdropFilter:"blur(12px)",borderRadius:16,padding:20,border:"1px solid "+T.border,boxShadow:"0 4px 20px rgba(0,0,0,.04)"}},
+            h("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:12}},
+              h("span",{style:{fontSize:16}},icon),
+              h("span",{style:{fontSize:14,fontWeight:700,color:T.tx}},st2.Store+" — "+st2.Sale_Type)),
+            h("div",{style:{fontSize:24,fontWeight:800,color:cl}},fmt(st2.Total_Ticket)),
+            h("div",{style:{fontSize:11,color:T.tt,marginTop:4}},fN(tickets.filter(function(t){return t.Store===st2.Store&&t.Sale_Type===st2.Sale_Type}).length)+" tickets"))
+        })),
+      h(SH,{icon:Ic.Cart,title:"Detalle de Tickets Online",sub:"Todos los tickets con canal de venta en línea",gradient:"linear-gradient(135deg,#6366f1,#818cf8)"}),
+      h(DT,{columns:[
+        {header:"Tienda",key:"Store",bold:true,render:function(r){return h("div",{style:{display:"flex",alignItems:"center",gap:6}},h("div",{style:{width:8,height:8,borderRadius:3,background:r.Store==="LEONA"?SC[0]:SC[1]}}),r.Store)}},
+        {header:"Tipo",key:"Sale_Type",render:function(r){return h("span",{style:{fontSize:11,padding:"3px 10px",borderRadius:8,fontWeight:600,background:r.Sale_Type==="Jasmine Sale"?"linear-gradient(135deg,#fdf2f8,#fce7f3)":"linear-gradient(135deg,#ecfdf5,#d1fae5)",color:r.Sale_Type==="Jasmine Sale"?T.pk:T.gn}},r.Sale_Type)}},
+        {header:"Ticket",key:"Ticket",mono:true,render:function(r){return h("span",{onClick:function(){var st3=r.Store==="LEONA"?"Leona Vicario":"Circunvalacion";doLookup(String(r.Ticket),st3,fmtD(olFrom));setTab("tickets")},style:{color:T.pr,cursor:"pointer",fontWeight:700,textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:3}},r.Ticket)}},
+        {header:"Venta",align:"right",mono:true,render:function(r){return fmt(r.Total_Ticket)},color:function(){return T.pu}}
       ],data:tickets,empty:"Sin tickets"}))
   })():null),
 
