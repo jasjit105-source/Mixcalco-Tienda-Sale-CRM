@@ -741,9 +741,8 @@ tab==="online"&&h(Panel,null,
     return h("div",null,
       h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:16,marginBottom:24}},
         h(KPI,{icon:Ic.Dol,label:"Total Online",value:fmt(onlineTotal),sub:fN(tickets.length)+" tickets online",kpiStyle:0,delay:1}),
-        h(KPI,{icon:Ic.Usr,label:"Jasmine Sales",value:fmt(jasmineTotal),sub:fN(jasmineTickets)+" tickets",kpiStyle:3,delay:2}),
-        h(KPI,{icon:Ic.Cart,label:"Venta Total Tiendas",value:fmt(allStoreSales),sub:fN(allStoreTickets)+" tickets totales",kpiStyle:2,delay:3}),
-        h(KPI,{icon:Ic.Bar,label:"% Online",value:allStoreSales>0?((onlineTotal/allStoreSales)*100).toFixed(1)+"%":"0%",sub:"del total de ventas",kpiStyle:1,delay:4})),
+        h(KPI,{icon:Ic.Cart,label:"Venta Total Tiendas",value:fmt(allStoreSales),sub:fN(allStoreTickets)+" tickets totales",kpiStyle:2,delay:2}),
+        h(KPI,{icon:Ic.Bar,label:"% Online",value:allStoreSales>0?((onlineTotal/allStoreSales)*100).toFixed(1)+"%":"0%",sub:"del total de ventas",kpiStyle:1,delay:3})),
       (function(){
         var cercuSale=tickets.filter(function(t){return t.Store==="CERCU"}).reduce(function(s,t){return s+t.Total_Ticket},0);
         var cercuTkt=tickets.filter(function(t){return t.Store==="CERCU"}).length;
