@@ -744,17 +744,29 @@ tab==="online"&&h(Panel,null,
         h(KPI,{icon:Ic.Usr,label:"Jasmine Sales",value:fmt(jasmineTotal),sub:fN(jasmineTickets)+" tickets",kpiStyle:3,delay:2}),
         h(KPI,{icon:Ic.Cart,label:"Venta Total Tiendas",value:fmt(allStoreSales),sub:fN(allStoreTickets)+" tickets totales",kpiStyle:2,delay:3}),
         h(KPI,{icon:Ic.Bar,label:"% Online",value:allStoreSales>0?((onlineTotal/allStoreSales)*100).toFixed(1)+"%":"0%",sub:"del total de ventas",kpiStyle:1,delay:4})),
-      h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:16,marginBottom:24}},
-        stTotals.map(function(st2,i){
-          var cl=st2.Sale_Type==="Jasmine Sale"?T.pk:SC[i%SC.length];
-          var icon=st2.Sale_Type==="Jasmine Sale"?"👩‍💻":"🏪";
-          return h("div",{key:i,className:"fu fu"+(i+1),style:{background:"rgba(255,255,255,.85)",backdropFilter:"blur(12px)",borderRadius:16,padding:20,border:"1px solid "+T.border,boxShadow:"0 4px 20px rgba(0,0,0,.04)"}},
-            h("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:12}},
-              h("span",{style:{fontSize:16}},icon),
-              h("span",{style:{fontSize:14,fontWeight:700,color:T.tx}},st2.Store+" — "+st2.Sale_Type)),
-            h("div",{style:{fontSize:24,fontWeight:800,color:cl}},fmt(st2.Total_Ticket)),
-            h("div",{style:{fontSize:11,color:T.tt,marginTop:4}},fN(tickets.filter(function(t){return t.Store===st2.Store&&t.Sale_Type===st2.Sale_Type}).length)+" tickets"))
-        })),
+      (function(){
+        var cercuSale=tickets.filter(function(t){return t.Store==="CERCU"}).reduce(function(s,t){return s+t.Total_Ticket},0);
+        var cercuTkt=tickets.filter(function(t){return t.Store==="CERCU"}).length;
+        var leonaSale=tickets.filter(function(t){return t.Store==="LEONA"}).reduce(function(s,t){return s+t.Total_Ticket},0);
+        var leonaTkt=tickets.filter(function(t){return t.Store==="LEONA"}).length;
+        var jasmineSale=tickets.filter(function(t){return t.Store==="JASMINE"}).reduce(function(s,t){return s+t.Total_Ticket},0);
+        var jasmineTkt=tickets.filter(function(t){return t.Store==="JASMINE"}).length;
+        var storeOnly=onlineTotal-jasmineSale;
+        var pieData=[{name:"Tienda Online",value:storeOnly,color:T.pu},{name:"Jasmine",value:jasmineSale,color:T.pk},{name:"En Tienda",value:Math.max(0,allStoreSales-onlineTotal),color:T.gn}].filter(function(d){return d.value>0});
+        var cards=[{name:"CERCU",sale:cercuSale,tkt:cercuTkt,cl:SC[1]},{name:"LEONA",sale:leonaSale,tkt:leonaTkt,cl:SC[0]},{name:"JASMINE",sale:jasmineSale,tkt:jasmineTkt,cl:T.pk}];
+        return h(React.Fragment,null,
+          h("div",{style:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16,marginBottom:24}},
+            cards.map(function(c,i){return h("div",{key:c.name,className:"fu fu"+(i+1),style:{background:"rgba(255,255,255,.85)",backdropFilter:"blur(12px)",borderRadius:16,padding:20,border:"1px solid "+T.border,boxShadow:"0 4px 20px rgba(0,0,0,.04)"}},
+              h("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:12}},
+                h("div",{style:{width:10,height:10,borderRadius:"50%",background:c.cl}}),
+                h("span",{style:{fontSize:14,fontWeight:700,color:T.tx}},c.name)),
+              h("div",{style:{fontSize:24,fontWeight:800,color:c.cl}},fmt(c.sale)),
+              h("div",{style:{fontSize:11,color:T.tt,marginTop:4}},fN(c.tkt)+" tickets"),
+              allStoreSales>0&&h("div",{style:{fontSize:11,color:T.tt,marginTop:2}},((c.sale/allStoreSales)*100).toFixed(1)+"% del total"))})),
+          h("div",{style:{display:"flex",gap:24,marginBottom:24,alignItems:"center",justifyContent:"center",background:"rgba(255,255,255,.85)",borderRadius:16,padding:"20px 28px",border:"1px solid "+T.border}},
+            h(ResponsiveContainer,{width:180,height:180},h(PieChart,null,h(Pie,{data:pieData,cx:"50%",cy:"50%",innerRadius:45,outerRadius:75,dataKey:"value",stroke:"none",paddingAngle:3},pieData.map(function(d,i){return h(Cell,{key:i,fill:d.color})})),h(Tooltip,{content:h(CTip,null)}))),
+            h("div",{style:{display:"flex",flexDirection:"column",gap:8}},pieData.map(function(d){return h("div",{key:d.name,style:{display:"flex",alignItems:"center",gap:8}},h("div",{style:{width:12,height:12,borderRadius:4,background:d.color}}),h("span",{style:{fontSize:12,color:T.tx,fontWeight:600}},d.name+" "+fmt(d.value)),h("span",{style:{fontSize:11,color:T.tt}},allStoreSales>0?((d.value/allStoreSales)*100).toFixed(1)+"%":""))}))));
+      })(),
       h(SH,{icon:Ic.Cart,title:"Detalle de Tickets Online",sub:"Todos los tickets con canal de venta en línea",gradient:"linear-gradient(135deg,#6366f1,#818cf8)"}),
       h(DT,{columns:[
         {header:"Tienda",key:"Store",bold:true,render:function(r){return h("div",{style:{display:"flex",alignItems:"center",gap:6}},h("div",{style:{width:8,height:8,borderRadius:3,background:r.Store==="LEONA"?SC[0]:r.Store==="JASMINE"?T.pk:SC[1]}}),r.Store)}},
