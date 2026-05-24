@@ -320,6 +320,7 @@ function StyleReport(props){
 
 function getISOWeek(d){var dt=new Date(d);dt.setHours(0,0,0,0);dt.setDate(dt.getDate()+3-(dt.getDay()+6)%7);var w1=new Date(dt.getFullYear(),0,4);return 1+Math.round(((dt-w1)/86400000-3+(w1.getDay()+6)%7)/7)}
 var DIAS=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+function parseLocalDate(s){var p=s.split("-");return new Date(+p[0],+p[1]-1,+p[2],12,0,0)}
 function buildPrediction(allData,predStart,predEnd){
   var training=allData.filter(function(d){return d.Fecha<predStart});
   var actual={};allData.filter(function(d){return d.Fecha>=predStart&&d.Fecha<=predEnd}).forEach(function(d){actual[d.Fecha]=d});
@@ -329,8 +330,8 @@ function buildPrediction(allData,predStart,predEnd){
   var monthSum=new Array(12).fill(0),monthCnt=new Array(12).fill(0);
   var wdSum={},wdW={};var overallSum=0;
   training.forEach(function(d,i){
-    var dt=new Date(d.Fecha);var dow=dt.getDay();var mo=dt.getMonth();
-    var w=Math.pow(0.997,maxAge-i);
+    var dt=parseLocalDate(d.Fecha);var dow=dt.getDay();var mo=dt.getMonth();
+    var w=Math.pow(0.993,maxAge-i);
     dowSum[dow]+=d.Total_Sale*w;dowW[dow]+=w;
     monthSum[mo]+=d.Total_Sale;monthCnt[mo]++;overallSum+=d.Total_Sale;
     var wk=getISOWeek(dt)+"-"+dow;
@@ -340,17 +341,26 @@ function buildPrediction(allData,predStart,predEnd){
   var overallAvg=overallSum/training.length;
   var dowAvg=dowSum.map(function(s,i){return dowW[i]>0?s/dowW[i]:overallAvg});
   var monthFactor=monthSum.map(function(s,i){return monthCnt[i]>0?(s/monthCnt[i])/overallAvg:1});
-  var last60=training.slice(-60),prev60=training.slice(-120,-60);
-  var l60a=last60.reduce(function(s,d){return s+d.Total_Sale},0)/(last60.length||1);
-  var p60a=prev60.reduce(function(s,d){return s+d.Total_Sale},0)/(prev60.length||1);
-  var trend=p60a>0?l60a/p60a:1;trend=Math.max(0.7,Math.min(1.3,trend));
-  var results=[];var cur=new Date(predStart);var end=new Date(predEnd);
+  var last21=training.slice(-21),prev21=training.slice(-42,-21);
+  var l21a=last21.reduce(function(s,d){return s+d.Total_Sale},0)/(last21.length||1);
+  var p21a=prev21.reduce(function(s,d){return s+d.Total_Sale},0)/(prev21.length||1);
+  var trend=p21a>0?l21a/p21a:1;trend=Math.max(0.8,Math.min(1.2,trend));
+  var biasWindow=training.slice(-14);var biasSum=0;var biasCnt=0;
+  biasWindow.forEach(function(d){
+    var dt=parseLocalDate(d.Fecha);var dow=dt.getDay();var mo=dt.getMonth();
+    var raw=dowAvg[dow]*monthFactor[mo]*trend;
+    if(raw>0){biasSum+=(d.Total_Sale/raw);biasCnt++}
+  });
+  var biasFactor=biasCnt>0?biasSum/biasCnt:1;
+  biasFactor=Math.max(0.7,Math.min(1.3,biasFactor));
+  var results=[];var cur=parseLocalDate(predStart);var end=parseLocalDate(predEnd);
   while(cur<=end){
-    var ds=cur.toISOString().slice(0,10);var dow=cur.getDay();var mo=cur.getMonth();
+    var y=cur.getFullYear(),m=String(cur.getMonth()+1).padStart(2,"0"),dy=String(cur.getDate()).padStart(2,"0");
+    var ds=y+"-"+m+"-"+dy;var dow=cur.getDay();var mo=cur.getMonth();
     var wk=getISOWeek(cur)+"-"+dow;
     var pred=dowAvg[dow]*monthFactor[mo];
-    if(wdSum[wk]&&wdW[wk]>0){var wp=wdSum[wk]/wdW[wk];pred=pred*0.6+wp*0.4}
-    pred=pred*trend;pred=Math.round(pred);
+    if(wdSum[wk]&&wdW[wk]>0){var wp=wdSum[wk]/wdW[wk];pred=pred*0.5+wp*0.5}
+    pred=pred*trend*biasFactor;pred=Math.round(pred);
     var act=actual[ds];var av=act?act.Total_Sale:null;
     var err=av!==null?Math.abs(pred-av):null;
     var ep=av!==null&&av>0?Math.round((err/av)*1000)/10:null;
@@ -359,7 +369,7 @@ function buildPrediction(allData,predStart,predEnd){
   }
   var wa=results.filter(function(r){return r.Actual!==null&&r.Actual>0});
   var mape=wa.length>0?Math.round(wa.reduce(function(s,r){return s+r.ErrorPct},0)/wa.length*10)/10:null;
-  return{results:results,mape:mape,trend:trend,trainingDays:training.length}
+  return{results:results,mape:mape,trend:trend,trainingDays:training.length,biasFactor:Math.round(biasFactor*1000)/1000}
 }
 
 function App(){
@@ -910,7 +920,7 @@ tab==="predict"&&h(Panel,null,
         h(KPI,{icon:Ic.Trd,label:"Predicted Sales",value:fmt(totPred),sub:fN(res.length)+" days",kpiStyle:0,delay:1}),
         hasActual&&h(KPI,{icon:Ic.Dol,label:"Actual Sales",value:fmt(totActual),sub:"Selected period",kpiStyle:2,delay:2}),
         mape!==null&&h(KPI,{icon:Ic.Bar,label:"MAPE",value:mape+"%",sub:mapeLabel,kpiStyle:mape<=15?2:mape<=25?0:3,delay:3}),
-        h(KPI,{icon:Ic.Usr,label:"Training Data",value:fN(predResult.trainingDays)+" days",sub:"Trend: "+(predResult.trend>1?"+":"")+((predResult.trend-1)*100).toFixed(1)+"%",kpiStyle:1,delay:4})),
+        h(KPI,{icon:Ic.Usr,label:"Training Data",value:fN(predResult.trainingDays)+" days",sub:"Trend: "+(predResult.trend>1?"+":"")+((predResult.trend-1)*100).toFixed(1)+"% | Bias: "+(predResult.biasFactor||1).toFixed(2),kpiStyle:1,delay:4})),
       mape!==null&&h("div",{style:{marginBottom:24,padding:"14px 20px",borderRadius:12,background:mape<=15?"linear-gradient(135deg,#ecfdf5,#d1fae5)":mape<=25?"linear-gradient(135deg,#fffbeb,#fef3c7)":"linear-gradient(135deg,#fef2f2,#fee2e2)",border:"1px solid "+(mape<=15?"rgba(16,185,129,.2)":mape<=25?"rgba(245,158,11,.2)":"rgba(239,68,68,.2)"),display:"flex",alignItems:"center",gap:12}},
         h("span",{style:{fontSize:22}},mape<=15?"✅":mape<=25?"⚠️":"❌"),
         h("div",null,
