@@ -118,6 +118,8 @@ onlineSales:()=>{var base="(SELECT 'LEONA' AS Store,CAST(NO_REFEREN AS VARCHAR(5
 
 onlineDaily:()=>"SELECT CONVERT(VARCHAR(10),FECHA,23) AS Fecha,'LEONA' AS Store,ROUND(SUM(Cantidad*Precio_Venta),0) AS Total_Sale,ROUND(SUM(CASE WHEN CANAL IS NOT NULL AND LTRIM(RTRIM(CANAL))<>'' THEN Cantidad*Precio_Venta ELSE 0 END),0) AS Online_Sale,0 AS Jasmine_Sale,COUNT(DISTINCT NO_REFEREN) AS Total_Tickets,COUNT(DISTINCT CASE WHEN CANAL IS NOT NULL AND LTRIM(RTRIM(CANAL))<>'' THEN NO_REFEREN END) AS Online_Tickets FROM MOVS_LEONA WHERE FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') AND Movimiento='TK' GROUP BY CONVERT(VARCHAR(10),FECHA,23) UNION ALL SELECT CONVERT(VARCHAR(10),FECHA,23),'CERCU',ROUND(SUM(Cantidad*Precio_Venta),0),ROUND(SUM(CASE WHEN CANAL IS NOT NULL AND LTRIM(RTRIM(CANAL))<>'' THEN Cantidad*Precio_Venta ELSE 0 END),0),ROUND(SUM(CASE WHEN CANAL IS NOT NULL AND LTRIM(RTRIM(CANAL))<>'' AND(UPPER(Vendedor) LIKE '%JASMINE%' OR UPPER(Vendedor) LIKE '%JAZMIN%') THEN Cantidad*Precio_Venta ELSE 0 END),0),COUNT(DISTINCT NO_REFEREN),COUNT(DISTINCT CASE WHEN CANAL IS NOT NULL AND LTRIM(RTRIM(CANAL))<>'' THEN NO_REFEREN END) FROM MOVS_CIRCUNVALACION WHERE FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') AND Movimiento='TK' GROUP BY CONVERT(VARCHAR(10),FECHA,23) ORDER BY Fecha,Store",
 
+predictionData:()=>"SELECT Fecha,SUM(Total_Sale) AS Total_Sale,SUM(Tickets) AS Tickets FROM(SELECT CONVERT(VARCHAR(10),FECHA,23) AS Fecha,ROUND(SUM(Cantidad*Precio_Venta),0) AS Total_Sale,COUNT(DISTINCT NO_REFEREN) AS Tickets FROM MOVS_CIRCUNVALACION WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') GROUP BY CONVERT(VARCHAR(10),FECHA,23) UNION ALL SELECT CONVERT(VARCHAR(10),FECHA,23),ROUND(SUM(Cantidad*Precio_Venta),0),COUNT(DISTINCT NO_REFEREN) FROM MOVS_LEONA WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') GROUP BY CONVERT(VARCHAR(10),FECHA,23) UNION ALL SELECT CONVERT(VARCHAR(10),FECHA,23),ROUND(SUM(Cantidad*Precio_Venta),0),COUNT(DISTINCT NO_REFEREN) FROM MOVS_LECUMBERRI WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') GROUP BY CONVERT(VARCHAR(10),FECHA,23) UNION ALL SELECT CONVERT(VARCHAR(10),FECHA,23),ROUND(SUM(Cantidad*Precio_Venta),0),COUNT(DISTINCT NO_REFEREN) FROM MOVS_CHINCONCUAC WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') GROUP BY CONVERT(VARCHAR(10),FECHA,23))X GROUP BY Fecha ORDER BY Fecha",
+
 fbAds:(art)=>{var as="(SELECT 'Circunvalacion' AS Store,M.FECHA,M.NO_REFEREN,M.Articulo,M.Cantidad,M.Precio_Venta,ISNULL(C.Costo,0) AS Cost FROM MOVS_CIRCUNVALACION M LEFT JOIN SAP_CC C ON C.Articulo=M.Articulo WHERE M.FECHA>='{{fecha1}}' AND M.FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT 'Leona Vicario',M.FECHA,M.NO_REFEREN,M.Articulo,M.Cantidad,M.Precio_Venta,ISNULL(C.Costo,0) FROM MOVS_LEONA M LEFT JOIN SAP_CC C ON C.Articulo=M.Articulo WHERE M.FECHA>='{{fecha1}}' AND M.FECHA<DATEADD(DAY,1,'{{fecha2}}'))";var tw="(SELECT DISTINCT 'Circunvalacion' AS Store,FECHA,NO_REFEREN FROM MOVS_CIRCUNVALACION WHERE Articulo='"+art+"' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION SELECT DISTINCT 'Leona Vicario',FECHA,NO_REFEREN FROM MOVS_LEONA WHERE Articulo='"+art+"' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}'))";var tt="(SELECT a.Store,a.FECHA,a.NO_REFEREN AS TicketNumber,SUM(a.Cantidad) AS TotalPCS,ROUND(SUM(a.Cantidad*a.Precio_Venta),0) AS TicketTotal,ROUND(SUM((a.Precio_Venta-a.Cost)*a.Cantidad),0) AS TicketProfit,CAST(CASE WHEN SUM(a.Cantidad*a.Precio_Venta)=0 THEN 0 ELSE ROUND(100.0*SUM((a.Precio_Venta-a.Cost)*a.Cantidad)/SUM(a.Cantidad*a.Precio_Venta),2)END AS DECIMAL(10,2)) AS ProfitPercentage FROM "+as+" a INNER JOIN "+tw+" t ON a.Store=t.Store AND a.FECHA=t.FECHA AND a.NO_REFEREN=t.NO_REFEREN GROUP BY a.Store,a.FECHA,a.NO_REFEREN)";return "SELECT Store,CONVERT(VARCHAR(10),FECHA,23) AS Fecha,TicketNumber,TotalPCS,TicketTotal,TicketProfit,ProfitPercentage,1 AS SortOrder FROM "+tt+" x UNION ALL SELECT Store+' TOTAL',NULL,NULL,SUM(TotalPCS),ROUND(SUM(TicketTotal),0),ROUND(SUM(TicketProfit),0),CAST(CASE WHEN SUM(TicketTotal)=0 THEN 0 ELSE ROUND(100.0*SUM(TicketProfit)/SUM(TicketTotal),2)END AS DECIMAL(10,2)),2 FROM "+tt+" y GROUP BY Store UNION ALL SELECT 'GRAND TOTAL',NULL,NULL,SUM(TotalPCS),ROUND(SUM(TicketTotal),0),ROUND(SUM(TicketProfit),0),CAST(CASE WHEN SUM(TicketTotal)=0 THEN 0 ELSE ROUND(100.0*SUM(TicketProfit)/SUM(TicketTotal),2)END AS DECIMAL(10,2)),3 FROM "+tt+" z ORDER BY SortOrder,Store,Fecha,TicketNumber"},
 };
 
@@ -316,6 +318,50 @@ function StyleReport(props){
       ],data:inv})):null);
 }
 
+function getISOWeek(d){var dt=new Date(d);dt.setHours(0,0,0,0);dt.setDate(dt.getDate()+3-(dt.getDay()+6)%7);var w1=new Date(dt.getFullYear(),0,4);return 1+Math.round(((dt-w1)/86400000-3+(w1.getDay()+6)%7)/7)}
+var DIAS=["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+function buildPrediction(allData,predStart,predEnd){
+  var training=allData.filter(function(d){return d.Fecha<predStart});
+  var actual={};allData.filter(function(d){return d.Fecha>=predStart&&d.Fecha<=predEnd}).forEach(function(d){actual[d.Fecha]=d});
+  if(training.length<30)return{error:"Datos insuficientes (mínimo 30 días de historial)",results:[],mape:null};
+  var maxAge=training.length;
+  var dowSum=[0,0,0,0,0,0,0],dowW=[0,0,0,0,0,0,0];
+  var monthSum=new Array(12).fill(0),monthCnt=new Array(12).fill(0);
+  var wdSum={},wdW={};var overallSum=0;
+  training.forEach(function(d,i){
+    var dt=new Date(d.Fecha);var dow=dt.getDay();var mo=dt.getMonth();
+    var w=Math.pow(0.997,maxAge-i);
+    dowSum[dow]+=d.Total_Sale*w;dowW[dow]+=w;
+    monthSum[mo]+=d.Total_Sale;monthCnt[mo]++;overallSum+=d.Total_Sale;
+    var wk=getISOWeek(dt)+"-"+dow;
+    if(!wdSum[wk]){wdSum[wk]=0;wdW[wk]=0}
+    wdSum[wk]+=d.Total_Sale*w;wdW[wk]+=w;
+  });
+  var overallAvg=overallSum/training.length;
+  var dowAvg=dowSum.map(function(s,i){return dowW[i]>0?s/dowW[i]:overallAvg});
+  var monthFactor=monthSum.map(function(s,i){return monthCnt[i]>0?(s/monthCnt[i])/overallAvg:1});
+  var last60=training.slice(-60),prev60=training.slice(-120,-60);
+  var l60a=last60.reduce(function(s,d){return s+d.Total_Sale},0)/(last60.length||1);
+  var p60a=prev60.reduce(function(s,d){return s+d.Total_Sale},0)/(prev60.length||1);
+  var trend=p60a>0?l60a/p60a:1;trend=Math.max(0.7,Math.min(1.3,trend));
+  var results=[];var cur=new Date(predStart);var end=new Date(predEnd);
+  while(cur<=end){
+    var ds=cur.toISOString().slice(0,10);var dow=cur.getDay();var mo=cur.getMonth();
+    var wk=getISOWeek(cur)+"-"+dow;
+    var pred=dowAvg[dow]*monthFactor[mo];
+    if(wdSum[wk]&&wdW[wk]>0){var wp=wdSum[wk]/wdW[wk];pred=pred*0.6+wp*0.4}
+    pred=pred*trend;pred=Math.round(pred);
+    var act=actual[ds];var av=act?act.Total_Sale:null;
+    var err=av!==null?Math.abs(pred-av):null;
+    var ep=av!==null&&av>0?Math.round((err/av)*1000)/10:null;
+    results.push({Fecha:ds,Dia:DIAS[dow],Predicted:pred,Actual:av,Error:err,ErrorPct:ep});
+    cur.setDate(cur.getDate()+1);
+  }
+  var wa=results.filter(function(r){return r.Actual!==null&&r.Actual>0});
+  var mape=wa.length>0?Math.round(wa.reduce(function(s,r){return s+r.ErrorPct},0)/wa.length*10)/10:null;
+  return{results:results,mape:mape,trend:trend,trainingDays:training.length}
+}
+
 function App(){
 var st=useState,cb=useCallback;
 var s1=st("overview"),tab=s1[0],setTab=s1[1];
@@ -346,7 +392,7 @@ var s27=st(null),corteReceipt=s27[0],setCorteReceipt=s27[1];
 
 var fd=fmtD(date);
 var stores=["Circunvalacion","Jazmin","Leona Vicario","Lucumberri","Chinconcuac"];
-var tabs=[{id:"overview",l:"Resumen"},{id:"tickets",l:"Tickets"},{id:"items",l:"Top Art\u00edculos"},{id:"report",l:"Reporte Ventas"},{id:"yazmin",l:"Jazmin CRM"},{id:"inventory",l:"Inventario"},{id:"kardex",l:"Kardex"},{id:"deposits",l:"Dep\u00f3sitos"},{id:"corte",l:"Corte de Caja"},{id:"styles",l:"An\u00e1lisis Estilos"},{id:"online",l:"Online Sale"}];
+var tabs=[{id:"overview",l:"Resumen"},{id:"tickets",l:"Tickets"},{id:"items",l:"Top Art\u00edculos"},{id:"report",l:"Reporte Ventas"},{id:"yazmin",l:"Jazmin CRM"},{id:"inventory",l:"Inventario"},{id:"kardex",l:"Kardex"},{id:"deposits",l:"Dep\u00f3sitos"},{id:"corte",l:"Corte de Caja"},{id:"styles",l:"An\u00e1lisis Estilos"},{id:"online",l:"Online Sale"},{id:"predict",l:"Predicción"}];
 
 var qStore=useQuery(SQL.storeSummary(),{fecha:fd},[fd]);
 var qTop=useQuery(SQL.topItems(),{fecha:fd},[fd,"items"]);
@@ -392,6 +438,26 @@ var doOnlineSales=function(){
     setOlData(res[0]||[]);setOlLoading(false);
     setOlDailyData(res[1]||[]);setOlDailyLoading(false);
   }).catch(function(e){setOlErr(e.message);setOlLoading(false);setOlDailyLoading(false)});
+};
+
+var s60=st(new Date().toISOString().slice(0,8)+"01"),predFrom=s60[0],setPredFrom=s60[1];
+var s61=st(date),predTo=s61[0],setPredTo=s61[1];
+var s62=st(null),predResult=s62[0],setPredResult=s62[1];
+var s63=st(false),predLoading=s63[0],setPredLoading=s63[1];
+var s64=st(null),predErr=s64[0],setPredErr=s64[1];
+var s65=st("backtest"),predMode=s65[0],setPredMode=s65[1];
+
+var doPrediction=function(){
+  setPredLoading(true);setPredErr(null);setPredResult(null);
+  var pf=fmtD(predFrom),pt=fmtD(predTo);
+  var trainStart=new Date(predFrom);trainStart.setFullYear(trainStart.getFullYear()-2);
+  var ts=trainStart.toISOString().slice(0,10);
+  runQuery(SQL.predictionData(),{fecha1:ts,fecha2:pt}).then(function(r){
+    if(!r||!r.length){setPredErr("No hay datos históricos");setPredLoading(false);return}
+    var result=buildPrediction(r,pf,pt);
+    if(result.error){setPredErr(result.error);setPredLoading(false);return}
+    setPredResult(result);setPredLoading(false);
+  }).catch(function(e){setPredErr(e.message);setPredLoading(false)});
 };
 
 var doFbAds=function(){
@@ -821,6 +887,55 @@ tab==="online"&&h(Panel,null,
         {header:"Online Tkt",key:"Online_Tickets",align:"center",mono:true,color:function(){return T.pu}}
       ],data:tableRows}))
   })():null)),
+
+// PREDICTION
+tab==="predict"&&h(Panel,null,
+  h(SH,{icon:Ic.Trd,title:"Predicción de Ventas",sub:"Algoritmo: día de semana + estacionalidad mensual + tendencia reciente + semana del año",gradient:"linear-gradient(135deg,#f59e0b,#f97316)"}),
+  h("div",{style:{display:"flex",gap:16,flexWrap:"wrap",marginBottom:16,alignItems:"flex-end"}},
+    h("div",null,h("label",{style:{fontSize:10,color:T.pr,display:"block",marginBottom:4,fontWeight:700,textTransform:"uppercase"}},"Desde"),h("input",{type:"date",value:predFrom,onChange:function(e){setPredFrom(e.target.value)},style:{padding:"8px 14px",border:"1px solid "+T.border,borderRadius:10,fontSize:13,fontFamily:"inherit"}})),
+    h("div",null,h("label",{style:{fontSize:10,color:T.pr,display:"block",marginBottom:4,fontWeight:700,textTransform:"uppercase"}},"Hasta"),h("input",{type:"date",value:predTo,onChange:function(e){setPredTo(e.target.value)},style:{padding:"8px 14px",border:"1px solid "+T.border,borderRadius:10,fontSize:13,fontFamily:"inherit"}})),
+    h("div",{style:{display:"flex",gap:4}},
+      h(TabBtn,{active:predMode==="backtest",label:"Backtest",onClick:function(){setPredMode("backtest")}}),
+      h(TabBtn,{active:predMode==="forecast",label:"Forecast",onClick:function(){setPredMode("forecast")}})),
+    h("button",{onClick:doPrediction,style:{background:"linear-gradient(135deg,#f59e0b,#f97316)",color:"#fff",border:"none",borderRadius:12,padding:"10px 24px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(249,115,22,.3)"}},"Predecir")),
+  predLoading?h(Loading):predErr?h(Err,{msg:predErr}):predResult?(function(){
+    var res=predResult.results;var mape=predResult.mape;
+    var hasActual=res.some(function(r){return r.Actual!==null});
+    var totPred=res.reduce(function(s,r){return s+r.Predicted},0);
+    var totActual=hasActual?res.filter(function(r){return r.Actual!==null}).reduce(function(s,r){return s+r.Actual},0):null;
+    var mapeColor=mape===null?T.tt:mape<=15?T.gn:mape<=25?T.am:T.rd;
+    var mapeLabel=mape===null?"—":mape<=15?"Excelente":mape<=25?"Aceptable":"Revisar";
+    return h("div",null,
+      h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:16,marginBottom:24}},
+        h(KPI,{icon:Ic.Trd,label:"Venta Predicha",value:fmt(totPred),sub:fN(res.length)+" días",kpiStyle:0,delay:1}),
+        hasActual&&h(KPI,{icon:Ic.Dol,label:"Venta Real",value:fmt(totActual),sub:"Periodo seleccionado",kpiStyle:2,delay:2}),
+        mape!==null&&h(KPI,{icon:Ic.Bar,label:"MAPE",value:mape+"%",sub:mapeLabel,kpiStyle:mape<=15?2:mape<=25?0:3,delay:3}),
+        h(KPI,{icon:Ic.Usr,label:"Datos Entrenamiento",value:fN(predResult.trainingDays)+" días",sub:"Tendencia: "+(predResult.trend>1?"+":"")+((predResult.trend-1)*100).toFixed(1)+"%",kpiStyle:1,delay:4})),
+      mape!==null&&h("div",{style:{marginBottom:24,padding:"14px 20px",borderRadius:12,background:mape<=15?"linear-gradient(135deg,#ecfdf5,#d1fae5)":mape<=25?"linear-gradient(135deg,#fffbeb,#fef3c7)":"linear-gradient(135deg,#fef2f2,#fee2e2)",border:"1px solid "+(mape<=15?"rgba(16,185,129,.2)":mape<=25?"rgba(245,158,11,.2)":"rgba(239,68,68,.2)"),display:"flex",alignItems:"center",gap:12}},
+        h("span",{style:{fontSize:22}},mape<=15?"✅":mape<=25?"⚠️":"❌"),
+        h("div",null,
+          h("div",{style:{fontSize:13,fontWeight:700,color:mapeColor}},mapeLabel+" — Error promedio: "+mape+"%"),
+          h("div",{style:{fontSize:11,color:T.tt,marginTop:2}},mape<=15?"Predicción confiable para planificación":mape<=25?"Útil como referencia, considerar factores externos":"Revisar: posibles eventos especiales, promociones o cambios en el negocio"))),
+      h("div",{style:{marginBottom:24,background:"rgba(255,255,255,.85)",borderRadius:16,padding:20,border:"1px solid "+T.border}},
+        h("div",{style:{fontSize:13,fontWeight:700,marginBottom:12}},"Predicción vs Real"),
+        h(ResponsiveContainer,{width:"100%",height:300},
+          h(AreaChart,{data:res,margin:{left:10,right:10}},
+            h(CartesianGrid,{stroke:T.bL}),
+            h(XAxis,{dataKey:"Fecha",tick:{fill:T.tt,fontSize:9},tickFormatter:function(v){return v.slice(5)}}),
+            h(YAxis,{tick:{fill:T.tt,fontSize:10},tickFormatter:function(v){return"$"+Math.round(v/1000)+"k"}}),
+            h(Tooltip,{content:h(CTip,null)}),
+            h(Area,{type:"monotone",dataKey:"Predicted",stroke:T.am,fill:"rgba(245,158,11,.1)",strokeWidth:2,name:"Predicción",dot:false}),
+            hasActual&&h(Area,{type:"monotone",dataKey:"Actual",stroke:T.gn,fill:"rgba(16,185,129,.1)",strokeWidth:2,name:"Real",dot:false})))),
+      h(SH,{icon:Ic.Cart,title:predMode==="backtest"?"Backtest Diario":"Pronóstico Diario",sub:predMode==="backtest"?"Predicción vs venta real — comparación día a día":"Venta estimada por día",gradient:"linear-gradient(135deg,#f59e0b,#f97316)"}),
+      h(DT,{columns:[
+        {header:"Fecha",key:"Fecha",mono:true,bold:true},
+        {header:"Día",key:"Dia",render:function(r){var weekend=r.Dia==="Sáb"||r.Dia==="Dom";return h("span",{style:{fontWeight:600,color:weekend?T.pk:T.tx,fontSize:11,padding:"2px 8px",borderRadius:6,background:weekend?"#fdf2f8":"transparent"}},r.Dia)}},
+        {header:"Predicción",align:"right",mono:true,render:function(r){return h("span",{style:{color:T.am,fontWeight:700}},fmt(r.Predicted))}},
+        hasActual&&{header:"Real",align:"right",mono:true,render:function(r){return r.Actual!==null?h("span",{style:{fontWeight:700}},fmt(r.Actual)):h("span",{style:{color:T.tt}},"—")}},
+        hasActual&&{header:"Error",align:"right",mono:true,render:function(r){return r.Error!==null?fmt(r.Error):h("span",{style:{color:T.tt}},"—")}},
+        hasActual&&{header:"Error %",align:"right",render:function(r){if(r.ErrorPct===null)return h("span",{style:{color:T.tt}},"—");var c=r.ErrorPct<=15?T.gn:r.ErrorPct<=25?T.am:T.rd;return h("span",{style:{fontSize:11,padding:"3px 8px",borderRadius:6,fontWeight:700,background:r.ErrorPct<=15?"#ecfdf5":r.ErrorPct<=25?"#fffbeb":"#fef2f2",color:c}},r.ErrorPct+"%")}}
+      ].filter(Boolean),data:res}))
+  })():null),
 
 // FOOTER
 h("footer",{style:{marginTop:40,paddingTop:18,borderTop:"1px solid "+T.bL,display:"flex",justifyContent:"space-between",alignItems:"center"}},h("span",{style:{fontSize:11,color:T.tt}},"Sahiba Centro Dashboard \u00b7 LIVE \u00b7 "+date),h("div",{style:{display:"flex",alignItems:"center",gap:8}},h("div",{style:{width:8,height:8,borderRadius:"50%",background:qStore.error?"#ef4444":"#10b981"}}),h("span",{style:{fontSize:11,color:qStore.error?T.rd:T.gn,fontWeight:600}},qStore.error?"Desconectado":"Conectado"))))
