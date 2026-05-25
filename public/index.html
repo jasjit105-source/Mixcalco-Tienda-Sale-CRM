@@ -114,7 +114,7 @@ styleAnalysis:(arts)=>"SELECT C.Articulo,C.Store,SUM(C.Cantidad) AS Qty,ROUND(SU
 
 styleInventory:(arts)=>"SELECT I.Articulo,SUM(CASE WHEN I.Store='Circunvalacion' THEN I.EXISTENCIA ELSE 0 END) AS Cercu,SUM(CASE WHEN I.Store='Leona' THEN I.EXISTENCIA ELSE 0 END) AS Leona,SUM(CASE WHEN I.Store='Lecumberri' THEN I.EXISTENCIA ELSE 0 END) AS Lecum,SUM(CASE WHEN I.Store='Chinconcuac' THEN I.EXISTENCIA ELSE 0 END) AS Chinco,SUM(CASE WHEN I.Store='Bodega' THEN I.EXISTENCIA ELSE 0 END) AS Bodega,SUM(I.EXISTENCIA) AS Total FROM(SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) AS Articulo,EXISTENCIA,'Circunvalacion' AS Store FROM PRODS_C UNION ALL SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1),EXISTENCIA,'Leona' FROM PRODS_L UNION ALL SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1),EXISTENCIA,'Lecumberri' FROM PRODS_LECU UNION ALL SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1),EXISTENCIA,'Chinconcuac' FROM PRODS_CHIN UNION ALL SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1),EXISTENCIA,'Bodega' FROM SAP_CC)I WHERE I.Articulo IN("+arts+") GROUP BY I.Articulo ORDER BY I.Articulo",
 
-onlineSales:()=>{var base="(SELECT 'LEONA' AS Store,CAST(NO_REFEREN AS VARCHAR(50)) AS Ticket,'Store Sale' AS Sale_Type,ROUND(SUM(Cantidad*Precio_Venta),0) AS Total_Ticket FROM MOVS_LEONA WHERE FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') AND Movimiento='TK' AND CANAL IS NOT NULL AND LTRIM(RTRIM(CANAL))<>'' GROUP BY NO_REFEREN UNION ALL SELECT CASE WHEN UPPER(Vendedor) LIKE '%JASMINE%' OR UPPER(Vendedor) LIKE '%JAZMIN%' THEN 'JASMINE' ELSE 'CERCU' END,CAST(NO_REFEREN AS VARCHAR(50)),CASE WHEN UPPER(Vendedor) LIKE '%JASMINE%' OR UPPER(Vendedor) LIKE '%JAZMIN%' THEN 'Jasmine Sale' ELSE 'Store Sale' END,ROUND(SUM(Cantidad*Precio_Venta),0) FROM MOVS_CIRCUNVALACION WHERE FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') AND Movimiento='TK' AND CANAL IS NOT NULL AND LTRIM(RTRIM(CANAL))<>'' GROUP BY NO_REFEREN,Vendedor)";return "SELECT Store,Sale_Type,Ticket,Total_Ticket,1 AS SortOrder FROM "+base+" a UNION ALL SELECT Store,Sale_Type,'TOTAL',SUM(Total_Ticket),2 FROM "+base+" b GROUP BY Store,Sale_Type UNION ALL SELECT 'GRAND TOTAL','ALL','TOTAL',SUM(Total_Ticket),3 FROM "+base+" c ORDER BY SortOrder,Store,Sale_Type,Ticket"},
+onlineSales:()=>{var base="(SELECT 'LEONA' AS Store,CAST(NO_REFEREN AS VARCHAR(50)) AS Ticket,'Store Sale' AS Sale_Type,ROUND(SUM(Cantidad*Precio_Venta),0) AS Total_Ticket FROM MOVS_LEONA WHERE FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') AND Movimiento='TK' AND CANAL IS NOT NULL AND LTRIM(RTRIM(CANAL))<>'' GROUP BY NO_REFEREN UNION ALL SELECT CASE WHEN MAX(CASE WHEN UPPER(Vendedor) LIKE '%JASMINE%' OR UPPER(Vendedor) LIKE '%JAZMIN%' THEN 1 ELSE 0 END)=1 THEN 'JASMINE' ELSE 'CERCU' END,CAST(NO_REFEREN AS VARCHAR(50)),CASE WHEN MAX(CASE WHEN UPPER(Vendedor) LIKE '%JASMINE%' OR UPPER(Vendedor) LIKE '%JAZMIN%' THEN 1 ELSE 0 END)=1 THEN 'Jasmine Sale' ELSE 'Store Sale' END,ROUND(SUM(Cantidad*Precio_Venta),0) FROM MOVS_CIRCUNVALACION WHERE FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') AND Movimiento='TK' AND CANAL IS NOT NULL AND LTRIM(RTRIM(CANAL))<>'' GROUP BY NO_REFEREN)";return "SELECT Store,Sale_Type,Ticket,Total_Ticket,1 AS SortOrder FROM "+base+" a UNION ALL SELECT Store,Sale_Type,'TOTAL',SUM(Total_Ticket),2 FROM "+base+" b GROUP BY Store,Sale_Type UNION ALL SELECT 'GRAND TOTAL','ALL','TOTAL',SUM(Total_Ticket),3 FROM "+base+" c ORDER BY SortOrder,Store,Sale_Type,Ticket"},
 
 onlineDaily:()=>"SELECT CONVERT(VARCHAR(10),FECHA,23) AS Fecha,'LEONA' AS Store,ROUND(SUM(Cantidad*Precio_Venta),0) AS Total_Sale,ROUND(SUM(CASE WHEN CANAL IS NOT NULL AND LTRIM(RTRIM(CANAL))<>'' THEN Cantidad*Precio_Venta ELSE 0 END),0) AS Online_Sale,0 AS Jasmine_Sale,COUNT(DISTINCT NO_REFEREN) AS Total_Tickets,COUNT(DISTINCT CASE WHEN CANAL IS NOT NULL AND LTRIM(RTRIM(CANAL))<>'' THEN NO_REFEREN END) AS Online_Tickets FROM MOVS_LEONA WHERE FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') AND Movimiento='TK' GROUP BY CONVERT(VARCHAR(10),FECHA,23) UNION ALL SELECT CONVERT(VARCHAR(10),FECHA,23),'CERCU',ROUND(SUM(Cantidad*Precio_Venta),0),ROUND(SUM(CASE WHEN CANAL IS NOT NULL AND LTRIM(RTRIM(CANAL))<>'' THEN Cantidad*Precio_Venta ELSE 0 END),0),ROUND(SUM(CASE WHEN CANAL IS NOT NULL AND LTRIM(RTRIM(CANAL))<>'' AND(UPPER(Vendedor) LIKE '%JASMINE%' OR UPPER(Vendedor) LIKE '%JAZMIN%') THEN Cantidad*Precio_Venta ELSE 0 END),0),COUNT(DISTINCT NO_REFEREN),COUNT(DISTINCT CASE WHEN CANAL IS NOT NULL AND LTRIM(RTRIM(CANAL))<>'' THEN NO_REFEREN END) FROM MOVS_CIRCUNVALACION WHERE FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') AND Movimiento='TK' GROUP BY CONVERT(VARCHAR(10),FECHA,23) ORDER BY Fecha,Store",
 
@@ -273,7 +273,7 @@ function generateJazminPDF(data,from,to){
 
 function StyleReport(props){
   var data=props.data||[];var inv=props.inv||[];
-  if(!data.length)return h("div",{style:{textAlign:"center",padding:40,color:T.tt,fontSize:14}},"Sin ventas para estos estilos en el per\u00edodo seleccionado");
+  if(!data.length)return h("div",{style:{textAlign:"center",padding:40,color:T.tt,fontSize:14}},"No sales for these styles in the selected period");
   var byArt={};
   data.forEach(function(r){
     if(!byArt[r.Articulo])byArt[r.Articulo]={art:r.Articulo,stores:{},totQty:0,totRev:0,totProfit:0};
@@ -288,7 +288,7 @@ function StyleReport(props){
   var grandProfit=arts.reduce(function(s,a){return s+a.totProfit},0);
   return h(React.Fragment,null,
     h("div",{style:{display:"flex",gap:16,flexWrap:"wrap",marginBottom:20}},
-      h("div",{style:{padding:"12px 20px",borderRadius:12,background:"linear-gradient(135deg,#f5f3ff,#ede9fe)"}},h("div",{style:{fontSize:9,color:T.pu,fontWeight:700,textTransform:"uppercase"}},"Estilos"),h("div",{style:{fontSize:22,fontWeight:800}},fN(arts.length))),
+      h("div",{style:{padding:"12px 20px",borderRadius:12,background:"linear-gradient(135deg,#f5f3ff,#ede9fe)"}},h("div",{style:{fontSize:9,color:T.pu,fontWeight:700,textTransform:"uppercase"}},"Styles"),h("div",{style:{fontSize:22,fontWeight:800}},fN(arts.length))),
       h("div",{style:{padding:"12px 20px",borderRadius:12,background:"linear-gradient(135deg,#eef2ff,#e0e7ff)"}},h("div",{style:{fontSize:9,color:T.pr,fontWeight:700,textTransform:"uppercase"}},"Total Piezas"),h("div",{style:{fontSize:22,fontWeight:800}},fN(grandQty))),
       h("div",{style:{padding:"12px 20px",borderRadius:12,background:"linear-gradient(135deg,#fdf2f8,#fce7f3)"}},h("div",{style:{fontSize:9,color:T.pk,fontWeight:700,textTransform:"uppercase"}},"Ingreso Total"),h("div",{style:{fontSize:22,fontWeight:800}},fmt(grandRev))),
       h("div",{style:{padding:"12px 20px",borderRadius:12,background:"linear-gradient(135deg,#ecfdf5,#d1fae5)"}},h("div",{style:{fontSize:9,color:T.gn,fontWeight:700,textTransform:"uppercase"}},"Total Profit"),h("div",{style:{fontSize:22,fontWeight:800}},fmt(grandProfit))),
@@ -744,7 +744,7 @@ tab==="corte"&&h(Panel,null,
           h("div",{style:{padding:"10px 18px",borderRadius:12,background:color+"12"}},h("div",{style:{fontSize:9,color:color,fontWeight:700,textTransform:"uppercase"}},"Income"),h("div",{style:{fontSize:20,fontWeight:800}},fmt(data.reduce(function(a,r){return a+nr(r.totalIngresos)},0)))),
           h("div",{style:{padding:"10px 18px",borderRadius:12,background:color+"12"}},h("div",{style:{fontSize:9,color:color,fontWeight:700,textTransform:"uppercase"}},"Expenses"),h("div",{style:{fontSize:20,fontWeight:800}},fmt(data.reduce(function(a,r){return a+nr(r.totalEgresos)},0))))),
         h(DT,{columns:[
-          {header:"#Corte",key:"numeroCorte",mono:true,bold:true,color:function(){return color}},
+          {header:"Close #",key:"numeroCorte",mono:true,bold:true,color:function(){return color}},
           {header:"Time",key:"usuhora",mono:true},
           {header:"Cashier",key:"cajero",bold:true},
           {header:"Station",key:"estacion",mono:true},
@@ -778,7 +778,7 @@ tab==="corte"&&h(Panel,null,
               h("div",null,h("div",{style:{fontSize:9,color:color,fontWeight:700,textTransform:"uppercase"}},"Total Cash"),h("div",{style:{fontSize:22,fontWeight:800,color:T.tx}},fmt(totCaja))),
               h("div",null,h("div",{style:{fontSize:9,color:color,fontWeight:700,textTransform:"uppercase"}},"Customers"),h("div",{style:{fontSize:18,fontWeight:800,color:T.tx}},fN(totClientes))),
               h("div",null,h("div",{style:{fontSize:9,color:color,fontWeight:700,textTransform:"uppercase"}},"Units"),h("div",{style:{fontSize:18,fontWeight:800,color:T.tx}},fN(totUnidades)))),
-            h("div",{style:{fontSize:11,color:color,fontWeight:600}},data.length+" corte"+(data.length>1?"s":"")+" \u2192 Click para ver detalle")))}))
+            h("div",{style:{fontSize:11,color:color,fontWeight:600}},data.length+" register"+(data.length>1?"s":"")+" \u2192 Click to view details")))}))
   )),
 
 // STYLE ANALYSIS
@@ -787,11 +787,11 @@ tab==="styles"&&h(Panel,null,
   h("div",{style:{display:"flex",gap:16,flexWrap:"wrap",marginBottom:16,alignItems:"flex-end"}},
     h("div",null,h("label",{style:{fontSize:10,color:T.pr,display:"block",marginBottom:4,fontWeight:700,textTransform:"uppercase"}},"From"),h("input",{type:"date",value:styleFrom,onChange:function(e){setStyleFrom(e.target.value)},style:{padding:"8px 14px",border:"1px solid "+T.border,borderRadius:10,fontSize:13,fontFamily:"inherit"}})),
     h("div",null,h("label",{style:{fontSize:10,color:T.pr,display:"block",marginBottom:4,fontWeight:700,textTransform:"uppercase"}},"To"),h("input",{type:"date",value:styleTo,onChange:function(e){setStyleTo(e.target.value)},style:{padding:"8px 14px",border:"1px solid "+T.border,borderRadius:10,fontSize:13,fontFamily:"inherit"}})),
-    h("label",{style:{display:"flex",alignItems:"center",gap:6,padding:"8px 16px",background:"linear-gradient(135deg,#f0f4ff,#fdf2f8)",borderRadius:10,border:"1px solid "+T.border,cursor:"pointer",fontSize:12,fontWeight:600,color:T.pr}},"\ud83d\udcc1 Subir CSV",h("input",{type:"file",accept:".csv,.txt",onChange:handleStyleCSV,style:{display:"none"}})),
-    h("button",{onClick:runStyleAnalysis,style:{background:"linear-gradient(135deg,#f59e0b,#fbbf24)",color:"#fff",border:"none",borderRadius:12,padding:"10px 24px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}},"\ud83d\udd0d Analizar")),
+    h("label",{style:{display:"flex",alignItems:"center",gap:6,padding:"8px 16px",background:"linear-gradient(135deg,#f0f4ff,#fdf2f8)",borderRadius:10,border:"1px solid "+T.border,cursor:"pointer",fontSize:12,fontWeight:600,color:T.pr}},"\ud83d\udcc1 Upload CSV",h("input",{type:"file",accept:".csv,.txt",onChange:handleStyleCSV,style:{display:"none"}})),
+    h("button",{onClick:runStyleAnalysis,style:{background:"linear-gradient(135deg,#f59e0b,#fbbf24)",color:"#fff",border:"none",borderRadius:12,padding:"10px 24px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}},"\ud83d\udd0d Analyze")),
   h("div",{style:{marginBottom:16}},
-    h("label",{style:{fontSize:10,color:T.pr,display:"block",marginBottom:4,fontWeight:700,textTransform:"uppercase"}},"Estilos (uno por l\u00ednea, o separados por comas)"),
-    h("textarea",{value:styleInput,onChange:function(e){setStyleInput(e.target.value)},placeholder:"1234BA\n5678TU\n9012VE\n\n...o sube un archivo CSV",rows:5,style:{width:"100%",padding:12,border:"1.5px solid "+T.border,borderRadius:12,fontSize:13,fontFamily:"'JetBrains Mono',monospace",resize:"vertical",outline:"none",boxSizing:"border-box"}})),
+    h("label",{style:{fontSize:10,color:T.pr,display:"block",marginBottom:4,fontWeight:700,textTransform:"uppercase"}},"Styles (one per line, or comma-separated)"),
+    h("textarea",{value:styleInput,onChange:function(e){setStyleInput(e.target.value)},placeholder:"1234BA\n5678TU\n9012VE\n\n...or upload a CSV file",rows:5,style:{width:"100%",padding:12,border:"1.5px solid "+T.border,borderRadius:12,fontSize:13,fontFamily:"'JetBrains Mono',monospace",resize:"vertical",outline:"none",boxSizing:"border-box"}})),
   styleLoading?h(Loading):styleErr?h(Err,{msg:styleErr}):styleData?h(StyleReport,{data:styleData,inv:styleInvData}):null),
 
 // ONLINE SALES
@@ -800,15 +800,15 @@ tab==="online"&&h(Panel,null,
   h("div",{style:{display:"flex",gap:16,flexWrap:"wrap",marginBottom:20,alignItems:"flex-end"}},
     h("div",null,h("label",{style:{fontSize:10,color:T.pr,display:"block",marginBottom:4,fontWeight:700,textTransform:"uppercase"}},"From"),h("input",{type:"date",value:olFrom,onChange:function(e){setOlFrom(e.target.value)},style:{padding:"8px 14px",border:"1px solid "+T.border,borderRadius:10,fontSize:13,fontFamily:"inherit"}})),
     h("div",null,h("label",{style:{fontSize:10,color:T.pr,display:"block",marginBottom:4,fontWeight:700,textTransform:"uppercase"}},"To"),h("input",{type:"date",value:olTo,onChange:function(e){setOlTo(e.target.value)},style:{padding:"8px 14px",border:"1px solid "+T.border,borderRadius:10,fontSize:13,fontFamily:"inherit"}})),
-    h("button",{onClick:doOnlineSales,style:{background:"linear-gradient(135deg,#8b5cf6,#a78bfa)",color:"#fff",border:"none",borderRadius:12,padding:"10px 24px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(139,92,246,.3)"}},"Actualizar")),
+    h("button",{onClick:doOnlineSales,style:{background:"linear-gradient(135deg,#8b5cf6,#a78bfa)",color:"#fff",border:"none",borderRadius:12,padding:"10px 24px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(139,92,246,.3)"}},"Refresh")),
   h("div",{style:{display:"flex",gap:4,marginBottom:20}},
     h(TabBtn,{active:olTab==="tickets",label:"Tickets",onClick:function(){setOlTab("tickets")}}),
-    h(TabBtn,{active:olTab==="daily",label:"Reporte Diario",onClick:function(){setOlTab("daily")}})),
+    h(TabBtn,{active:olTab==="daily",label:"Daily Report",onClick:function(){setOlTab("daily")}})),
   olTab==="tickets"&&(olLoading?h(Loading):olErr?h(Err,{msg:olErr}):olData?(function(){
     var grand=olData.find(function(r){return r.SortOrder===3});
     var stTotals=olData.filter(function(r){return r.SortOrder===2});
     var tickets=olData.filter(function(r){return r.SortOrder===1});
-    if(!tickets.length)return h("div",{style:{textAlign:"center",padding:44,color:T.tt,fontSize:13}},"No se encontraron ventas online en este periodo");
+    if(!tickets.length)return h("div",{style:{textAlign:"center",padding:44,color:T.tt,fontSize:13}},"No online sales found in this period");
     var jasmineTotal=stTotals.filter(function(r){return r.Sale_Type==="Jasmine Sale"}).reduce(function(s,r){return s+r.Total_Ticket},0);
     var jasmineTickets=tickets.filter(function(r){return r.Sale_Type==="Jasmine Sale"}).length;
     var allStoreSales=olDailyData?olDailyData.reduce(function(s,r){return s+(r.Total_Sale||0)},0):0;
@@ -817,8 +817,8 @@ tab==="online"&&h(Panel,null,
     return h("div",null,
       h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:16,marginBottom:24}},
         h(KPI,{icon:Ic.Dol,label:"Total Online",value:fmt(onlineTotal),sub:fN(tickets.length)+" tickets online",kpiStyle:0,delay:1}),
-        h(KPI,{icon:Ic.Cart,label:"Venta Total Tiendas",value:fmt(allStoreSales),sub:fN(allStoreTickets)+" tickets totales",kpiStyle:2,delay:2}),
-        h(KPI,{icon:Ic.Bar,label:"% Online",value:allStoreSales>0?((onlineTotal/allStoreSales)*100).toFixed(1)+"%":"0%",sub:"del total de ventas",kpiStyle:1,delay:3})),
+        h(KPI,{icon:Ic.Cart,label:"Total Store Sales",value:fmt(allStoreSales),sub:fN(allStoreTickets)+" total tickets",kpiStyle:2,delay:2}),
+        h(KPI,{icon:Ic.Bar,label:"% Online",value:allStoreSales>0?((onlineTotal/allStoreSales)*100).toFixed(1)+"%":"0%",sub:"of total sales",kpiStyle:1,delay:3})),
       (function(){
         var cercuSale=tickets.filter(function(t){return t.Store==="CERCU"}).reduce(function(s,t){return s+t.Total_Ticket},0);
         var cercuTkt=tickets.filter(function(t){return t.Store==="CERCU"}).length;
@@ -827,7 +827,7 @@ tab==="online"&&h(Panel,null,
         var jasmineSale=tickets.filter(function(t){return t.Store==="JASMINE"}).reduce(function(s,t){return s+t.Total_Ticket},0);
         var jasmineTkt=tickets.filter(function(t){return t.Store==="JASMINE"}).length;
         var storeOnly=onlineTotal-jasmineSale;
-        var pieData=[{name:"Tienda Online",value:storeOnly,color:T.pu},{name:"Jasmine",value:jasmineSale,color:T.pk},{name:"En Tienda",value:Math.max(0,allStoreSales-onlineTotal),color:T.gn}].filter(function(d){return d.value>0});
+        var pieData=[{name:"Online Store",value:storeOnly,color:T.pu},{name:"Jasmine",value:jasmineSale,color:T.pk},{name:"In-Store",value:Math.max(0,allStoreSales-onlineTotal),color:T.gn}].filter(function(d){return d.value>0});
         var cards=[{name:"CERCU",sale:cercuSale,tkt:cercuTkt,cl:SC[1]},{name:"LEONA",sale:leonaSale,tkt:leonaTkt,cl:SC[0]},{name:"JASMINE",sale:jasmineSale,tkt:jasmineTkt,cl:T.pk}];
         return h(React.Fragment,null,
           h("div",{style:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16,marginBottom:24}},
@@ -837,22 +837,22 @@ tab==="online"&&h(Panel,null,
                 h("span",{style:{fontSize:14,fontWeight:700,color:T.tx}},c.name)),
               h("div",{style:{fontSize:24,fontWeight:800,color:c.cl}},fmt(c.sale)),
               h("div",{style:{fontSize:11,color:T.tt,marginTop:4}},fN(c.tkt)+" tickets"),
-              allStoreSales>0&&h("div",{style:{fontSize:11,color:T.tt,marginTop:2}},((c.sale/allStoreSales)*100).toFixed(1)+"% del total"))})),
+              allStoreSales>0&&h("div",{style:{fontSize:11,color:T.tt,marginTop:2}},((c.sale/allStoreSales)*100).toFixed(1)+"% of total"))})),
           h("div",{style:{display:"flex",gap:24,marginBottom:24,alignItems:"center",justifyContent:"center",background:"rgba(255,255,255,.85)",borderRadius:16,padding:"20px 28px",border:"1px solid "+T.border}},
             h(ResponsiveContainer,{width:180,height:180},h(PieChart,null,h(Pie,{data:pieData,cx:"50%",cy:"50%",innerRadius:45,outerRadius:75,dataKey:"value",stroke:"none",paddingAngle:3},pieData.map(function(d,i){return h(Cell,{key:i,fill:d.color})})),h(Tooltip,{content:h(CTip,null)}))),
             h("div",{style:{display:"flex",flexDirection:"column",gap:8}},pieData.map(function(d){return h("div",{key:d.name,style:{display:"flex",alignItems:"center",gap:8}},h("div",{style:{width:12,height:12,borderRadius:4,background:d.color}}),h("span",{style:{fontSize:12,color:T.tx,fontWeight:600}},d.name+" "+fmt(d.value)),h("span",{style:{fontSize:11,color:T.tt}},allStoreSales>0?((d.value/allStoreSales)*100).toFixed(1)+"%":""))}))));
       })(),
-      h(SH,{icon:Ic.Cart,title:"Detalle de Tickets Online",sub:"Todos los tickets con canal de venta en línea",gradient:"linear-gradient(135deg,#6366f1,#818cf8)"}),
+      h(SH,{icon:Ic.Cart,title:"Online Ticket Details",sub:"All tickets with online sales channel",gradient:"linear-gradient(135deg,#6366f1,#818cf8)"}),
       h(DT,{columns:[
         {header:"Store",key:"Store",bold:true,render:function(r){return h("div",{style:{display:"flex",alignItems:"center",gap:6}},h("div",{style:{width:8,height:8,borderRadius:3,background:r.Store==="LEONA"?SC[0]:r.Store==="JASMINE"?T.pk:SC[1]}}),r.Store)}},
-        {header:"Tipo",key:"Sale_Type",render:function(r){return h("span",{style:{fontSize:11,padding:"3px 10px",borderRadius:8,fontWeight:600,background:r.Sale_Type==="Jasmine Sale"?"linear-gradient(135deg,#fdf2f8,#fce7f3)":"linear-gradient(135deg,#ecfdf5,#d1fae5)",color:r.Sale_Type==="Jasmine Sale"?T.pk:T.gn}},r.Sale_Type)}},
+        {header:"Type",key:"Sale_Type",render:function(r){return h("span",{style:{fontSize:11,padding:"3px 10px",borderRadius:8,fontWeight:600,background:r.Sale_Type==="Jasmine Sale"?"linear-gradient(135deg,#fdf2f8,#fce7f3)":"linear-gradient(135deg,#ecfdf5,#d1fae5)",color:r.Sale_Type==="Jasmine Sale"?T.pk:T.gn}},r.Sale_Type)}},
         {header:"Ticket",key:"Ticket",mono:true,render:function(r){return h("span",{onClick:function(){var st3=r.Store==="LEONA"?"Leona Vicario":"Circunvalacion";doLookup(String(r.Ticket),st3,fmtD(olFrom));setTab("tickets")},style:{color:T.pr,cursor:"pointer",fontWeight:700,textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:3}},r.Ticket)}},
-        {header:"Venta",align:"right",mono:true,render:function(r){return fmt(r.Total_Ticket)},color:function(){return T.pu}}
-      ],data:tickets,empty:"Sin tickets"}))
+        {header:"Sale",align:"right",mono:true,render:function(r){return fmt(r.Total_Ticket)},color:function(){return T.pu}}
+      ],data:tickets,empty:"No tickets"}))
   })():null),
   olTab==="daily"&&(olDailyLoading?h(Loading):olErr?h(Err,{msg:olErr}):olDailyData?(function(){
     var rows=olDailyData;
-    if(!rows.length)return h("div",{style:{textAlign:"center",padding:44,color:T.tt,fontSize:13}},"No hay datos para este periodo");
+    if(!rows.length)return h("div",{style:{textAlign:"center",padding:44,color:T.tt,fontSize:13}},"No data for this period");
     var byStore={};var grandTot={ts:0,on:0,jz:0,tt:0,ot:0};
     rows.forEach(function(r){
       if(!byStore[r.Store])byStore[r.Store]={ts:0,on:0,jz:0,tt:0,ot:0};
@@ -865,7 +865,7 @@ tab==="online"&&h(Panel,null,
     var storeKeys=Object.keys(byStore);
     var tableRows=rows.slice();
     storeKeys.forEach(function(sk){tableRows.push({Fecha:"TOTAL",Store:sk,Total_Sale:byStore[sk].ts,Online_Sale:byStore[sk].on,Jasmine_Sale:byStore[sk].jz,Total_Tickets:byStore[sk].tt,Online_Tickets:byStore[sk].ot,_isTotal:true})});
-    tableRows.push({Fecha:"GRAN TOTAL",Store:"TODOS",Total_Sale:grandTot.ts,Online_Sale:grandTot.on,Jasmine_Sale:grandTot.jz,Total_Tickets:grandTot.tt,Online_Tickets:grandTot.ot,_isGrand:true});
+    tableRows.push({Fecha:"GRAND TOTAL",Store:"ALL",Total_Sale:grandTot.ts,Online_Sale:grandTot.on,Jasmine_Sale:grandTot.jz,Total_Tickets:grandTot.tt,Online_Tickets:grandTot.ot,_isGrand:true});
     return h("div",null,
       h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:16,marginBottom:24}},
         h(KPI,{icon:Ic.Dol,label:"Total Sales",value:fmt(grandTot.ts),sub:fN(grandTot.tt)+" total tickets",kpiStyle:0,delay:1}),
