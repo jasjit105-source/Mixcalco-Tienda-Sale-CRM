@@ -400,14 +400,15 @@ var s25=st(""),rsSearch=s25[0],setRsSearch=s25[1];
 var s26=st(null),corteStore=s26[0],setCorteStore=s26[1];
 var s27=st(null),corteReceipt=s27[0],setCorteReceipt=s27[1];
 
+var sRK=st(0),refreshKey=sRK[0],setRefreshKey=sRK[1];
 var fd=fmtD(date);
 var stores=["Circunvalacion","Jazmin","Leona Vicario","Lucumberri","Chinconcuac"];
 var tabs=[{id:"overview",l:"Overview"},{id:"tickets",l:"Tickets"},{id:"items",l:"Top Items"},{id:"report",l:"Sales Report"},{id:"yazmin",l:"Jazmin CRM"},{id:"inventory",l:"Inventory"},{id:"kardex",l:"Kardex"},{id:"deposits",l:"Deposits"},{id:"corte",l:"Cash Register"},{id:"styles",l:"Style Analysis"},{id:"online",l:"Online Sale"},{id:"predict",l:"Prediction"}];
 
-var qStore=useQuery(SQL.storeSummary(),{fecha:fd},[fd]);
-var qTop=useQuery(SQL.topItems(),{fecha:fd},[fd,"items"]);
-var qInv=useQuery(SQL.inventory(),{},[]);
-var qDep=useQuery(SQL.deposits(),{fecha:fd},[fd,"dep"]);
+var qStore=useQuery(SQL.storeSummary(),{fecha:fd},[fd,refreshKey]);
+var qTop=useQuery(SQL.topItems(),{fecha:fd},[fd,"items",refreshKey]);
+var qInv=useQuery(SQL.inventory(),{},[refreshKey]);
+var qDep=useQuery(SQL.deposits(),{fecha:fd},[fd,"dep",refreshKey]);
 
 var s28=st(null),corteCData=s28[0],setCorteCData=s28[1];
 var s29=st(null),corteLData=s29[0],setCorteLData=s29[1];
@@ -586,7 +587,10 @@ h("nav",{style:{padding:"12px 28px",display:"flex",gap:4,borderBottom:"1px solid
 h("main",{style:{padding:"24px 28px",maxWidth:1440,margin:"0 auto"}},
 
 // OVERVIEW
-tab==="overview"&&h(React.Fragment,null,qStore.loading?h(Loading):qStore.error?h(Err,{msg:qStore.error}):h(React.Fragment,null,
+tab==="overview"&&h(React.Fragment,null,
+  h("div",{style:{display:"flex",justifyContent:"flex-end",marginBottom:14}},
+    h("button",{onClick:function(){setRefreshKey(refreshKey+1)},style:{background:"linear-gradient(135deg,#6366f1,#818cf8)",color:"#fff",border:"none",borderRadius:10,padding:"8px 20px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(99,102,241,.3)",opacity:qStore.loading?.6:1}},"↻ Refresh")),
+  qStore.loading?h(Loading):qStore.error?h(Err,{msg:qStore.error}):h(React.Fragment,null,
   h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:16,marginBottom:26}},
     h(KPI,{icon:Ic.Cart,label:"Tickets",value:fN(tot.tickets),sub:"All stores",kpiStyle:0,delay:1}),
     h(KPI,{icon:Ic.Dol,label:"Sales",value:fmt(tot.sales),sub:"Avg "+fmt(tot.avgTicket)+"/ticket",kpiStyle:1,delay:2}),
