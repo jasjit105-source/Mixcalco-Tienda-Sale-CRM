@@ -18,6 +18,7 @@ const CASES = [
   ["ticketDetail", SQL.ticketDetail(null, "121234", "Leona Vicario"), { fecha: D }],
   ["topItems", SQL.topItems(), { fecha: D }],
   ["deposits", SQL.deposits(), { fecha: D }],
+  ["transfersByBank", SQL.transfersByBank(), { fecha: D }],
   ["inventory", SQL.inventory(), {}],
   ["yazminTickets", SQL.yazminTickets(), { fecha_inicio: D1, fecha_fin: D2 }],
   ["yazminDaily", SQL.yazminDaily(), { fecha_inicio: D1, fecha_fin: D2 }],
