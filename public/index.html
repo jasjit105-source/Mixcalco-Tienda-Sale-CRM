@@ -208,6 +208,185 @@ function parseCorte(txt){
   return{ventas:g(/Ingresos por Ventas:?\s*\$\s*([\d,]*\.?\d+)/i),tarjetas:g(/Total en Tarjetas:?\s*\$\s*([\d,]*\.?\d+)/i),transfer:g(/Total en Transfer:?\s*\$\s*([\d,]*\.?\d+)/i),efectivo:g(/Total en Efectivo:?\s*\$\s*([\d,]*\.?\d+)/i),egresos:g(/Total de Egresos:?\s*\$\s*([\d,]*\.?\d+)/i),caja:g(/Total en caja:?\s*\$\s*([\d,]*\.?\d+)/i),inicial:g(/Inicial en Caja:?\s*\$\s*([\d,]*\.?\d+)/i)};
 }
 function corteVals(r){var p=parseCorte(r.cadenaSalida);return{ventas:nr(r.totalVentas)||p.ventas||0,caja:p.caja!==null?p.caja:nr(r.totalCaja),tarjetas:p.tarjetas||0,transfer:p.transfer||0,efectivo:p.efectivo||0,egresos:nr(r.totalEgresos)||p.egresos||0,inicial:p.inicial||0};}
+/* ---- Excel Photos: upload an xlsx, embed each style's Drive photo ---- */
+function downloadBlob(blob,name){var url=URL.createObjectURL(blob);var a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url)},200);}
+function loadExcelJS(){
+  return new Promise(function(res,rej){
+    if(window.ExcelJS)return res(window.ExcelJS);
+    var s=document.createElement("script");
+    s.src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js";
+    s.onload=function(){res(window.ExcelJS)};
+    s.onerror=function(){rej(new Error("Could not load the Excel library. Check your internet connection."))};
+    document.head.appendChild(s);
+  });
+}
+function loadJSZip(){
+  return new Promise(function(res,rej){
+    if(window.JSZip)return res(window.JSZip);
+    var s=document.createElement("script");
+    s.src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+    s.onload=function(){res(window.JSZip)};
+    s.onerror=function(){rej(new Error("Could not load the zip library."))};
+    document.head.appendChild(s);
+  });
+}
+function colNumFromName(l){var n=0;for(var i=0;i<l.length;i++)n=n*26+(l.charCodeAt(i)-64);return n}
+function colNameFromNum(n){var s="";while(n>0){var m=(n-1)%26;s=String.fromCharCode(65+m)+s;n=Math.floor((n-1)/26)}return s}
+function shiftFormulaCols(f,insertedAt){
+  return String(f).replace(/(\$?)([A-Z]{1,3})(\$?)(\d+)/g,function(m,d1,L,d2,num,off,str){
+    if(!d1&&off>0&&/[A-Za-z0-9_.]/.test(str.charAt(off-1)))return m;
+    var n=colNumFromName(L);
+    return n>=insertedAt?d1+colNameFromNum(n+1)+d2+num:m;
+  });
+}
+function fetchDriveImageData(url){
+  var big=url.replace("=w200","=w400");
+  function toResult(blob){
+    return new Promise(function(res,rej){
+      var fr=new FileReader();
+      fr.onload=function(){
+        var b64=String(fr.result).split(",")[1];
+        var img=new Image();var u=URL.createObjectURL(blob);
+        img.onload=function(){URL.revokeObjectURL(u);res({base64:b64,w:img.naturalWidth,h:img.naturalHeight})};
+        img.onerror=function(){URL.revokeObjectURL(u);rej(new Error("bad image"))};
+        img.src=u;
+      };
+      fr.onerror=function(){rej(new Error("read failed"))};
+      fr.readAsDataURL(blob);
+    });
+  }
+  return fetch(big,{mode:"cors"}).then(function(r){if(!r.ok)throw new Error("http "+r.status);return r.blob()}).then(toResult)
+    .catch(function(){
+      var m=big.match(/\/d\/([^=\/]+)/);
+      if(!m)throw new Error("no image id");
+      return fetch("/api/img?id="+m[1]).then(function(r){if(!r.ok)throw new Error("image proxy "+r.status);return r.blob()}).then(toResult);
+    });
+}
+/* ExcelJS can't parse namespace-prefixed OOXML (openpyxl/other exporters) or some
+   embedded tables. Normalize the package first: strip the spreadsheetml prefix and
+   remove table parts, which we don't need. Excel-native files pass through unchanged. */
+async function normalizeXlsx(arrayBuffer,JSZip){
+  var zin=await JSZip.loadAsync(arrayBuffer);
+  var zout=new JSZip();
+  var norm=function(t){
+    t=t.replace(/^﻿/,"");
+    var m=t.match(/xmlns:([A-Za-z0-9]+)\s*=\s*"http:\/\/schemas\.openxmlformats\.org\/spreadsheetml\/2006\/main"/);
+    if(m){var p=m[1];
+      t=t.replace(new RegExp("<"+p+":","g"),"<").replace(new RegExp("</"+p+":","g"),"</");
+      t=t.replace(m[0],'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"');
+    }
+    return t.replace(/<tableParts[\s\S]*?<\/tableParts>/g,"").replace(/<tableParts[^>]*\/>/g,"");
+  };
+  var names=Object.keys(zin.files);
+  for(var i=0;i<names.length;i++){
+    var name=names[i],f=zin.files[name];
+    if(f.dir)continue;
+    if(/^xl\/tables\//i.test(name))continue;
+    if(/_rels\/[^\/]*\.rels$/i.test(name)){
+      var t=(await f.async("string")).replace(/^﻿/,"");
+      t=t.replace(/<Relationship\b[^>]*\/table\d*\.xml"[^>]*\/>/gi,"").replace(/<Relationship\b[^>]*Type="[^"]*\/table"[^>]*\/>/gi,"");
+      zout.file(name,t);continue;
+    }
+    if(/\[Content_Types\]\.xml$/i.test(name)){
+      var ct=(await f.async("string")).replace(/^﻿/,"").replace(/<Override\b[^>]*\/xl\/tables\/[^>]*\/>/gi,"");
+      zout.file(name,ct);continue;
+    }
+    if(/\.(xml|rels)$/i.test(name))zout.file(name,norm(await f.async("string")));
+    else zout.file(name,await f.async("uint8array"));
+  }
+  return zout.generateAsync({type:"arraybuffer"});
+}
+function withTimeout(promise,ms,msg){
+  return Promise.race([promise,new Promise(function(_,rej){setTimeout(function(){rej(new Error(msg))},ms)})]);
+}
+async function processExcelPhotos(arrayBuffer,fileName,onProgress){
+  var XL=await loadExcelJS();
+  if(!Object.keys(GDRIVE_IMG_MAP).length)throw new Error("Product photos are still loading from Google Drive — wait a few seconds and try again.");
+  // Always normalize first: a raw load can hang forever on prefixed/openpyxl files.
+  // For Excel-native files the normalizer is effectively a no-op (only strips tables).
+  var JSZip=await loadJSZip();
+  var fixed=await normalizeXlsx(arrayBuffer,JSZip);
+  var wb=new XL.Workbook();
+  await withTimeout(wb.xlsx.load(fixed),45000,"This Excel file could not be read. Try re-saving it from Excel as .xlsx and upload again.");
+  if(!wb.worksheets.length)throw new Error("No sheet with data was found in this file.");
+  var ws=wb.worksheets[0];
+  if(!ws)throw new Error("No sheet found in this file.");
+  var styleCol=null,headerRow=0;
+  var hdrRe=/^(style|styles|estilo|estilos|articulo|artículo|item|item code|codigo|código|clave|modelo|sku|style number)\b/i;
+  for(var r=1;r<=Math.min(ws.rowCount,20)&&!styleCol;r++){
+    for(var c=1;c<=30&&!styleCol;c++){
+      var v=ws.getRow(r).getCell(c).value;
+      if(typeof v==="string"&&hdrRe.test(v.trim())){styleCol=c;headerRow=r;}
+    }
+  }
+  var isStyleText=function(v){
+    if(v==null||typeof v==="object")return null;
+    var s=String(v).trim().toUpperCase();
+    if(!s||s.length>20||s.indexOf(" ")>=0||!/\d/.test(s)||!/^[0-9A-Z]/.test(s))return null;
+    return s;
+  };
+  if(!styleCol){
+    var hits={};
+    ws.eachRow(function(row,rn){row.eachCell(function(cell,cn){var s=isStyleText(cell.value);if(s&&getStyleImg(s.replace(/-.*$/,"")))hits[cn]=(hits[cn]||0)+1})});
+    var bc=null;Object.keys(hits).forEach(function(k){if(bc===null||hits[k]>hits[bc])bc=k});
+    if(bc===null)throw new Error("Could not find a style-number column in this file.");
+    styleCol=Number(bc);
+  }
+  var rows=[];
+  for(var r2=headerRow+1;r2<=ws.rowCount;r2++){
+    var s2=isStyleText(ws.getRow(r2).getCell(styleCol).value);
+    if(s2)rows.push({row:r2,style:s2});
+  }
+  if(!rows.length)throw new Error("No style numbers found in this file.");
+  var photoCol=null,inserted=false;
+  if(styleCol>1){
+    var leftEmpty=true;
+    for(var i0=0;i0<rows.length;i0++){var lv=ws.getRow(rows[i0].row).getCell(styleCol-1).value;if(lv!=null&&lv!==""){leftEmpty=false;break}}
+    if(leftEmpty)photoCol=styleCol-1;
+  }
+  if(!photoCol){
+    var merges=[];
+    try{merges=(ws.model&&ws.model.merges?ws.model.merges.slice():[])}catch(e){}
+    merges.forEach(function(m){try{ws.unMergeCells(m)}catch(e){}});
+    ws.spliceColumns(styleCol,0,[]);
+    ws.eachRow(function(row){row.eachCell(function(cell){
+      if(cell.formula){var nf=shiftFormulaCols(cell.formula,styleCol);if(nf!==cell.formula)cell.value={formula:nf};}
+    })});
+    merges.forEach(function(m){
+      var p=m.split(":");if(p.length!==2)return;
+      var sm=p[0].match(/([A-Z]+)(\d+)/),em=p[1].match(/([A-Z]+)(\d+)/);
+      if(!sm||!em)return;
+      var c1=colNumFromName(sm[1]),c2=colNumFromName(em[1]);
+      if(c1>=styleCol)c1++;if(c2>=styleCol)c2++;
+      try{ws.mergeCells(colNameFromNum(c1)+sm[2]+":"+colNameFromNum(c2)+em[2])}catch(e){}
+    });
+    photoCol=styleCol;styleCol=styleCol+1;inserted=true;
+  }
+  if(headerRow>0){var hc=ws.getRow(headerRow).getCell(photoCol);if(hc.value==null||hc.value==="")hc.value="Photo";}
+  ws.getColumn(photoCol).width=13;
+  var BOXW=84,BOXH=82,okC=0,miss=[];
+  for(var i=0;i<rows.length;i++){
+    var st=rows[i].style,rr=rows[i].row;
+    if(onProgress)onProgress(i+1,rows.length,st);
+    var url=getStyleImg(st)||getStyleImg(st.replace(/-.*$/,""));
+    if(!url){miss.push(st);continue;}
+    try{
+      var d=await fetchDriveImageData(url);
+      var sc=Math.min(BOXW/d.w,BOXH/d.h);
+      var w=Math.max(1,Math.round(d.w*sc)),hh=Math.max(1,Math.round(d.h*sc));
+      var imgId=wb.addImage({base64:d.base64,extension:"jpeg"});
+      var rowObj=ws.getRow(rr);
+      rowObj.height=Math.max(rowObj.height||0,BOXH*0.75+2);
+      ws.addImage(imgId,{tl:{col:photoCol-1+0.08,row:rr-1+0.05},ext:{width:w,height:hh},editAs:"oneCell"});
+      okC++;
+    }catch(e){miss.push(st);}
+  }
+  var out=await wb.xlsx.writeBuffer();
+  return{blob:new Blob([out],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}),
+    summary:{sheet:ws.name,lines:rows.length,withPhoto:okC,missing:miss,insertedColumn:inserted,
+      fileName:String(fileName||"file.xlsx").replace(/\.xlsx$/i,"")+"_with_photos.xlsx"}};
+}
+window.processExcelPhotos=processExcelPhotos;
 
 function KPI({icon:I2,label,value,sub,kpiStyle,delay}){
   var s=KG[kpiStyle%KG.length];
@@ -461,7 +640,7 @@ var s27=st(null),corteReceipt=s27[0],setCorteReceipt=s27[1];
 var sRK=st(0),refreshKey=sRK[0],setRefreshKey=sRK[1];
 var fd=fmtD(date);
 var stores=["Circunvalacion","Jazmin","Leona Vicario","Lucumberri","Chinconcuac"];
-var tabs=[{id:"overview",l:"Overview"},{id:"tickets",l:"Tickets"},{id:"items",l:"Top Items"},{id:"report",l:"Sales Report"},{id:"yazmin",l:"Jazmin CRM"},{id:"inventory",l:"Inventory"},{id:"alerts",l:"Stock Alerts"},{id:"kardex",l:"Kardex"},{id:"deposits",l:"Deposits"},{id:"corte",l:"Cash Register"},{id:"styles",l:"Style Analysis"},{id:"online",l:"Online Sale"},{id:"predict",l:"Prediction"}];
+var tabs=[{id:"overview",l:"Overview"},{id:"tickets",l:"Tickets"},{id:"items",l:"Top Items"},{id:"report",l:"Sales Report"},{id:"yazmin",l:"Jazmin CRM"},{id:"inventory",l:"Inventory"},{id:"alerts",l:"Stock Alerts"},{id:"kardex",l:"Kardex"},{id:"deposits",l:"Deposits"},{id:"corte",l:"Cash Register"},{id:"styles",l:"Style Analysis"},{id:"excelphotos",l:"Excel Photos"},{id:"online",l:"Online Sale"},{id:"predict",l:"Prediction"}];
 
 var prevDate=addDaysLocal(date,-7),fdPrev=fmtD(prevDate);
 var qStore=useQuery(SQL.storeSummary(),{fecha:fd},[fd,refreshKey]);
@@ -524,6 +703,24 @@ var s71=st(todayLocal()),saTo=s71[0],setSaTo=s71[1];
 var s72=st("dead"),saView=s72[0],setSaView=s72[1];
 var s73=st(5),saLow=s73[0],setSaLow=s73[1];
 var qSA=useQuery(SQL.stockAlerts(),{fecha1:fmtD(saFrom),fecha2:fmtD(saTo)},[fmtD(saFrom),fmtD(saTo),tab==="alerts"],tab==="alerts");
+
+var s80=st(false),xpBusy=s80[0],setXpBusy=s80[1];
+var s81=st(null),xpProg=s81[0],setXpProg=s81[1];
+var s82=st(null),xpRes=s82[0],setXpRes=s82[1];
+var s83=st(null),xpErr=s83[0],setXpErr=s83[1];
+var handleExcelPhotos=function(e){
+  var file=e.target.files[0];e.target.value="";
+  if(!file)return;
+  setXpBusy(true);setXpErr(null);setXpRes(null);setXpProg(null);
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    processExcelPhotos(ev.target.result,file.name,function(done,total,st2){setXpProg({done:done,total:total,style:st2})})
+      .then(function(res){setXpRes(res);setXpBusy(false);downloadBlob(res.blob,res.summary.fileName);})
+      .catch(function(err){setXpErr(err.message);setXpBusy(false);});
+  };
+  reader.onerror=function(){setXpErr("Could not read the file");setXpBusy(false)};
+  reader.readAsArrayBuffer(file);
+};
 
 var doPrediction=function(){
   setPredLoading(true);setPredErr(null);setPredResult(null);
@@ -1024,6 +1221,29 @@ tab==="alerts"&&h(Panel,null,
         {header:"Stock Value",align:"right",mono:true,render:function(r){return fmt(nr(r.Total_Stock)*nr(r.Costo))},color:function(){return T.gn}}
       ],data:view,empty:"No items match this filter"}));
   })():null),
+
+// EXCEL PHOTOS
+tab==="excelphotos"&&h(Panel,null,
+  h(SH,{icon:Ic.Pkg,title:"Excel Photos",sub:"Upload an Excel file — every style number gets its product photo from Google Drive",gradient:"linear-gradient(135deg,#06b6d4,#22d3ee)"}),
+  h("div",{style:{marginBottom:16,fontSize:12,color:T.tt}},Object.keys(GDRIVE_IMG_MAP).length?("📁 "+Object.keys(GDRIVE_IMG_MAP).length+" product photo names loaded from Google Drive"):"⏳ Loading product photos from Google Drive..."),
+  h("label",{style:{display:"inline-flex",alignItems:"center",gap:8,padding:"14px 26px",background:xpBusy?"#e2e8f0":"linear-gradient(135deg,#06b6d4,#22d3ee)",color:xpBusy?T.tt:"#fff",borderRadius:14,cursor:xpBusy?"default":"pointer",fontSize:14,fontWeight:700,boxShadow:xpBusy?"none":"0 4px 14px rgba(6,182,212,.3)"}},
+    xpBusy?"Processing…":"📂 Choose Excel file (.xlsx)",
+    h("input",{type:"file",accept:".xlsx",disabled:xpBusy,onChange:handleExcelPhotos,style:{display:"none"}})),
+  h("div",{style:{marginTop:10,fontSize:11,color:T.tt}},"The photo goes in the column left of the style numbers (a new column is inserted if needed and formulas are adjusted). Styles without a Drive photo are left blank."),
+  xpBusy&&xpProg&&h("div",{style:{marginTop:18,maxWidth:520}},
+    h("div",{style:{fontSize:12,color:T.ts,marginBottom:6,fontWeight:600}},"Placing photo "+xpProg.done+" of "+xpProg.total+(xpProg.style?" — "+xpProg.style:"")),
+    h("div",{style:{height:8,background:"#e0e7ff",borderRadius:4}},h("div",{style:{height:8,width:(xpProg.total?Math.round(100*xpProg.done/xpProg.total):0)+"%",background:"linear-gradient(90deg,#06b6d4,#6366f1)",borderRadius:4,transition:"width .2s"}}))),
+  xpErr&&h("div",{style:{marginTop:16}},h(Err,{msg:xpErr})),
+  xpRes&&h("div",{style:{marginTop:22}},
+    h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:14,marginBottom:16}},
+      h(KPI,{icon:Ic.Bar,label:"Style Lines",value:fN(xpRes.summary.lines),sub:"sheet: "+xpRes.summary.sheet,kpiStyle:0,delay:1}),
+      h(KPI,{icon:Ic.Pkg,label:"With Photo",value:fN(xpRes.summary.withPhoto),sub:"images embedded",kpiStyle:2,delay:2}),
+      h(KPI,{icon:Ic.Ey,label:"No Photo",value:fN(xpRes.summary.missing.length),sub:"left blank",kpiStyle:3,delay:3})),
+    h("button",{onClick:function(){downloadBlob(xpRes.blob,xpRes.summary.fileName)},style:{padding:"10px 22px",borderRadius:12,border:"none",background:"linear-gradient(135deg,#10b981,#34d399)",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(16,185,129,.3)",marginBottom:14}},"⤓ Download "+xpRes.summary.fileName),
+    xpRes.summary.missing.length>0&&h("div",null,
+      h("div",{style:{fontSize:12,fontWeight:700,color:T.am,marginBottom:6}},"Styles without a photo in Google Drive (add the image to the Drive folder and re-run):"),
+      h("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},xpRes.summary.missing.map(function(s2){return h("span",{key:s2,className:"chip",style:{background:"#fffbeb",color:T.am,fontFamily:"'JetBrains Mono',monospace"}},s2)})))))
+,
 
 // PREDICTION
 tab==="predict"&&h(Panel,null,

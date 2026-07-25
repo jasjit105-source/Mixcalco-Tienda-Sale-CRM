@@ -26,6 +26,17 @@ http.createServer(async (req, res) => {
     });
     return;
   }
+  if (req.url.startsWith("/api/img")) {
+    const id = new URL(req.url, "http://x").searchParams.get("id") || "";
+    if (!/^[\w-]{10,80}$/.test(id)) { res.writeHead(400); res.end("bad id"); return; }
+    try {
+      const up = await fetch("https://lh3.googleusercontent.com/d/" + id + "=w400", { redirect: "follow" });
+      const buf = Buffer.from(await up.arrayBuffer());
+      res.writeHead(up.status, { "Content-Type": up.headers.get("content-type") || "image/jpeg" });
+      res.end(buf);
+    } catch (e) { res.writeHead(502); res.end(e.message); }
+    return;
+  }
   const file = req.url === "/" || req.url.startsWith("/?") ? "/index.html" : req.url.split("?")[0];
   const fp = path.join(PUB, file);
   if (!fp.startsWith(PUB) || !fs.existsSync(fp)) { res.writeHead(404); res.end("not found"); return; }
