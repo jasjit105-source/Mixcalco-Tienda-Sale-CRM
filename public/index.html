@@ -388,6 +388,105 @@ async function processExcelPhotos(arrayBuffer,fileName,onProgress){
 }
 window.processExcelPhotos=processExcelPhotos;
 
+/* ---- Sales Report exports: styled xlsx and print-ready PDF ---- */
+var RS_COLS=[["Item","Articulo",14],["Cercu Pcs","Cercu_Sales",10],["Jazmin Pcs","Jazmin_Sales",10],["Leona Pcs","Leona_Sales",10],["Lecum Pcs","Lecum_Sales",10],["Chinco Pcs","Chinco_Sales",10],["Total Pcs","Total_Sales",10],["Revenue","Total_Revenue",12],["Avg Price","Avg_Price",10],["Cost","Cost",10],["Profit/Pc","Profit_Per_Pz",10],["Net Profit","Net_Profit",12],["St.Cercu","Cercu_Stock",9],["St.Leona","Leona_Stock",9],["St.Lecum","Lecum_Stock",9],["St.Chinco","Chinco_Stock",9],["St.Bodega","Bodega_Stock",9],["St.Total","Total_Stock",9]];
+async function exportSalesReportXLSX(rows,from,to){
+  if(!rows||!rows.length)return null;
+  var XL=await loadExcelJS();
+  var wb=new XL.Workbook();
+  var ws=wb.addWorksheet("Sales Report");
+  ws.mergeCells("A1:R1");
+  ws.getCell("A1").value="SAHIBA CENTRO — SALES REPORT";
+  ws.getCell("A1").font={bold:true,size:14,color:{argb:"FF6366F1"}};
+  ws.mergeCells("A2:R2");
+  ws.getCell("A2").value="Period: "+from+" to "+to+"  ·  Generated: "+todayLocal();
+  ws.getCell("A2").font={size:10,color:{argb:"FF64748B"}};
+  var HDR=4;
+  RS_COLS.forEach(function(c,i){
+    var cell=ws.getRow(HDR).getCell(i+1);
+    cell.value=c[0];
+    cell.font={bold:true,color:{argb:"FFFFFFFF"},size:10};
+    cell.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FF6366F1"}};
+    cell.alignment={horizontal:i===0?"left":"right"};
+    ws.getColumn(i+1).width=c[2];
+  });
+  rows.forEach(function(r,ri){
+    var row=ws.getRow(HDR+1+ri);
+    RS_COLS.forEach(function(c,i){
+      row.getCell(i+1).value=(i===0?r[c[1]]:nr(r[c[1]]));
+      if(i>0)row.getCell(i+1).alignment={horizontal:"right"};
+    });
+  });
+  [8,9,10,11,12].forEach(function(ci){ws.getColumn(ci).numFmt='"$"#,##0'});
+  var TOT=HDR+rows.length+1;
+  ws.getRow(TOT).getCell(1).value="TOTAL";
+  ws.getRow(TOT).getCell(1).font={bold:true};
+  [2,3,4,5,6,7,8,12,13,14,15,16,17,18].forEach(function(ci){
+    var L=colNameFromNum(ci);
+    var c2=ws.getRow(TOT).getCell(ci);
+    c2.value={formula:"SUM("+L+String(HDR+1)+":"+L+String(TOT-1)+")"};
+    c2.font={bold:true};
+    c2.alignment={horizontal:"right"};
+  });
+  ws.views=[{state:"frozen",ySplit:HDR}];
+  var buf=await wb.xlsx.writeBuffer();
+  var blob=new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+  downloadBlob(blob,"sales_report_"+from+"_"+to+".xlsx");
+  return blob;
+}
+function buildSalesReportHTML(rows,from,to){
+  var totPcs=rows.reduce(function(s,r){return s+nr(r.Total_Sales)},0);
+  var totRev=rows.reduce(function(s,r){return s+nr(r.Total_Revenue)},0);
+  var totProfit=rows.reduce(function(s,r){return s+nr(r.Net_Profit)},0);
+  var totStock=rows.reduce(function(s,r){return s+nr(r.Total_Stock)},0);
+  var money=function(n){return "$"+Math.round(n).toLocaleString("en-US")};
+  var html='<html><head><meta charset="utf-8"><title>Sales Report '+from+' to '+to+'</title><style>'+
+    '@page{size:landscape;margin:12mm}'+
+    'body{font-family:Arial,sans-serif;margin:24px;color:#1e1b4b}'+
+    '.header{text-align:center;margin-bottom:18px;padding-bottom:12px;border-bottom:3px solid #6366f1}'+
+    '.header h1{font-size:20px;color:#6366f1;margin:0 0 3px}'+
+    '.header p{font-size:11px;color:#94a3b8;margin:4px 0 0}'+
+    '.summary{display:flex;gap:14px;margin-bottom:16px;justify-content:center}'+
+    '.card{padding:10px 18px;border-radius:10px;text-align:center;min-width:110px}'+
+    '.card .label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px}'+
+    '.card .value{font-size:17px;font-weight:800}'+
+    '.c1{background:#eef2ff}.c1 .label{color:#6366f1}'+
+    '.c2{background:#f5f3ff}.c2 .label{color:#7c3aed}'+
+    '.c3{background:#fdf2f8}.c3 .label{color:#ec4899}'+
+    '.c4{background:#ecfdf5}.c4 .label{color:#10b981}'+
+    'table{width:100%;border-collapse:collapse;font-size:9.5px}'+
+    'th{background:#6366f1;color:#fff;padding:6px 7px;font-size:8.5px;text-transform:uppercase;letter-spacing:.4px;text-align:right}'+
+    'th:first-child{text-align:left}'+
+    'td{padding:4px 7px;border-bottom:1px solid #e2e8f0;text-align:right;font-family:monospace}'+
+    'td:first-child{text-align:left;font-weight:700;color:#6366f1}'+
+    'tr:nth-child(even){background:#f8fafc}'+
+    '.total-row td{background:#eef2ff;font-weight:700;border-top:2px solid #6366f1}'+
+    '.footer{margin-top:18px;text-align:center;font-size:9px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px}'+
+    '</style></head><body>'+
+    '<div class="header"><h1>SAHIBA CENTRO — SALES REPORT</h1><p>Period: '+from+' to '+to+' · Generated: '+new Date().toLocaleString("en-US")+'</p></div>'+
+    '<div class="summary">'+
+    '<div class="card c1"><div class="label">Styles</div><div class="value">'+rows.length.toLocaleString("en-US")+'</div></div>'+
+    '<div class="card c2"><div class="label">Total Pieces</div><div class="value">'+totPcs.toLocaleString("en-US")+'</div></div>'+
+    '<div class="card c3"><div class="label">Revenue</div><div class="value">'+money(totRev)+'</div></div>'+
+    '<div class="card c4"><div class="label">Net Profit</div><div class="value">'+money(totProfit)+'</div></div>'+
+    '</div><table><thead><tr><th>Item</th><th>Cercu</th><th>Jazmin</th><th>Leona</th><th>Lecum</th><th>Chinco</th><th>Total Pcs</th><th>Revenue</th><th>Avg</th><th>Cost</th><th>P/Pc</th><th>Net Profit</th><th>Stock</th></tr></thead><tbody>';
+  rows.forEach(function(r){
+    html+='<tr><td>'+(r.Articulo||"")+'</td><td>'+nr(r.Cercu_Sales)+'</td><td>'+nr(r.Jazmin_Sales)+'</td><td>'+nr(r.Leona_Sales)+'</td><td>'+nr(r.Lecum_Sales)+'</td><td>'+nr(r.Chinco_Sales)+'</td><td>'+nr(r.Total_Sales)+'</td><td>'+money(nr(r.Total_Revenue))+'</td><td>'+money(nr(r.Avg_Price))+'</td><td>'+money(nr(r.Cost))+'</td><td>'+money(nr(r.Profit_Per_Pz))+'</td><td>'+money(nr(r.Net_Profit))+'</td><td>'+nr(r.Total_Stock)+'</td></tr>';
+  });
+  html+='<tr class="total-row"><td>TOTAL</td><td>'+rows.reduce(function(s,r){return s+nr(r.Cercu_Sales)},0)+'</td><td>'+rows.reduce(function(s,r){return s+nr(r.Jazmin_Sales)},0)+'</td><td>'+rows.reduce(function(s,r){return s+nr(r.Leona_Sales)},0)+'</td><td>'+rows.reduce(function(s,r){return s+nr(r.Lecum_Sales)},0)+'</td><td>'+rows.reduce(function(s,r){return s+nr(r.Chinco_Sales)},0)+'</td><td>'+totPcs+'</td><td>'+money(totRev)+'</td><td></td><td></td><td></td><td>'+money(totProfit)+'</td><td>'+totStock+'</td></tr>';
+  html+='</tbody></table><div class="footer">SAHIBA CENTRO • Auto-generated report • '+new Date().toLocaleString("en-US")+'</div></body></html>';
+  return html;
+}
+function exportSalesReportPDF(rows,from,to){
+  if(!rows||!rows.length)return;
+  var html=buildSalesReportHTML(rows,from,to);
+  var w=window.open("","_blank");
+  if(w){w.document.write(html);w.document.close();setTimeout(function(){w.print()},500);}
+  else{downloadBlob(new Blob([html],{type:"text/html"}),"sales_report_"+from+"_"+to+".html");}
+}
+window.exportSalesReportXLSX=exportSalesReportXLSX;
+window.buildSalesReportHTML=buildSalesReportHTML;
+
 function KPI({icon:I2,label,value,sub,kpiStyle,delay}){
   var s=KG[kpiStyle%KG.length];
   return h("div",{className:"kpi-card fu fu"+delay,style:{background:s.bg,border:"1px solid "+s.ac+"20"}},
@@ -926,7 +1025,7 @@ tab==="inventory"&&h(Panel,null,h(SH,{icon:Ic.Pkg,title:"Inventory by Store",sub
 
 // REGULAR SALES REPORT
 tab==="report"&&h(React.Fragment,null,
-  h(Panel,{style:{marginBottom:20}},h(SH,{icon:Ic.Trd,title:"Regular Sales Report",sub:"Sales by store + inventory + profit",action:h(CSVBtn,{rows:qRS.data,name:"sales_report"}),gradient:"linear-gradient(135deg,#f59e0b,#fbbf24)"}),
+  h(Panel,{style:{marginBottom:20}},h(SH,{icon:Ic.Trd,title:"Regular Sales Report",sub:"Sales by store + inventory + profit",action:(function(){var _rsRows=(qRS.data||[]).filter(function(r){var q=rsSearch.toLowerCase();return!q||String(r.Articulo||"").toLowerCase().includes(q)});return h("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},h(CSVBtn,{rows:_rsRows,name:"sales_report"}),_rsRows.length>0&&h("button",{onClick:function(){exportSalesReportXLSX(_rsRows,rsFrom,rsTo)},style:{padding:"7px 14px",borderRadius:10,border:"1px solid "+T.border,background:"rgba(99,102,241,.08)",color:T.pr,fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}},"⤓ Excel"),_rsRows.length>0&&h("button",{onClick:function(){exportSalesReportPDF(_rsRows,rsFrom,rsTo)},style:{padding:"7px 14px",borderRadius:10,border:"1px solid "+T.border,background:"rgba(239,68,68,.08)",color:T.rd,fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}},"📄 PDF"))})(),gradient:"linear-gradient(135deg,#f59e0b,#fbbf24)"}),
     h("div",{style:{display:"flex",gap:14,flexWrap:"wrap",alignItems:"flex-end",marginBottom:14}},
       h("div",null,h("label",{style:{fontSize:10,color:T.pr,display:"block",marginBottom:4,fontWeight:700,textTransform:"uppercase",letterSpacing:1}},"From"),h("input",{type:"date",value:rsFrom,onChange:function(e){setRsFrom(e.target.value)},style:{padding:"8px 14px",border:"1px solid "+T.border,borderRadius:10,fontSize:13,fontFamily:"inherit",outline:"none"}})),
       h("div",null,h("label",{style:{fontSize:10,color:T.pr,display:"block",marginBottom:4,fontWeight:700,textTransform:"uppercase",letterSpacing:1}},"To"),h("input",{type:"date",value:rsTo,onChange:function(e){setRsTo(e.target.value)},style:{padding:"8px 14px",border:"1px solid "+T.border,borderRadius:10,fontSize:13,fontFamily:"inherit",outline:"none"}})),h(Presets,{onPick:function(f,t){setRsFrom(f);setRsTo(t)}}),
