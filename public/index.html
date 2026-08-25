@@ -144,6 +144,8 @@ onlineDaily:()=>"SELECT CONVERT(VARCHAR(10),M.FECHA,23) AS Fecha,'LEONA' AS Stor
 
 transfersByBank:()=>"SELECT Store,Bank,COUNT(*) AS Tickets,SUM(Sale) AS Sales,SUM(Deposit) AS Deposits FROM(SELECT 'Circunvalacion' AS Store,NO_REFEREN,UPPER(LTRIM(RTRIM(ISNULL(MAX(PAGO2),'')))) AS Bank,ROUND(SUM(Cantidad*Precio_Venta),0) AS Sale,MAX(ISNULL(PrEnvio,0)) AS Deposit,MAX(CASE WHEN UPPER(ISNULL(Tarjetas,'')) LIKE '%TRANSFER%' THEN 1 ELSE 0 END) AS St,MAX(CASE WHEN ISNULL(PrEnvio,0)>0 AND LTRIM(RTRIM(ISNULL(PAGO2,'')))<>'' THEN 1 ELSE 0 END) AS Dep,MAX(CASE WHEN UPPER(ISNULL(Tarjetas,'')) LIKE '%TARJETA%' THEN 1 ELSE 0 END) AS Card FROM MOVS_CIRCUNVALACION WHERE FECHA='{{fecha}}' AND Movimiento='TK' GROUP BY NO_REFEREN UNION ALL SELECT 'Leona Vicario',NO_REFEREN,UPPER(LTRIM(RTRIM(ISNULL(MAX(PAGO2),'')))),ROUND(SUM(Cantidad*Precio_Venta),0),MAX(ISNULL(PrEnvio,0)),MAX(CASE WHEN UPPER(ISNULL(Tarjetas,'')) LIKE '%TRANSFER%' THEN 1 ELSE 0 END),MAX(CASE WHEN ISNULL(PrEnvio,0)>0 AND LTRIM(RTRIM(ISNULL(PAGO2,'')))<>'' THEN 1 ELSE 0 END),MAX(CASE WHEN UPPER(ISNULL(Tarjetas,'')) LIKE '%TARJETA%' THEN 1 ELSE 0 END) FROM MOVS_LEONA WHERE FECHA='{{fecha}}' AND Movimiento='TK' GROUP BY NO_REFEREN)X WHERE Card=0 AND(St=1 OR Dep=1) GROUP BY Store,Bank ORDER BY Store,SUM(Sale) DESC",
 
+monthlySales:()=>"SELECT Mes,SUM(Pcs) AS Pcs,ROUND(SUM(Rev),0) AS Rev FROM(SELECT CONVERT(VARCHAR(7),FECHA,126) AS Mes,Cantidad AS Pcs,Cantidad*Precio_Venta AS Rev FROM MOVS_CIRCUNVALACION WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT CONVERT(VARCHAR(7),FECHA,126),Cantidad,Cantidad*Precio_Venta FROM MOVS_LEONA WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT CONVERT(VARCHAR(7),FECHA,126),Cantidad,Cantidad*Precio_Venta FROM MOVS_LECUMBERRI WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT CONVERT(VARCHAR(7),FECHA,126),Cantidad,Cantidad*Precio_Venta FROM MOVS_CHINCONCUAC WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}'))X GROUP BY Mes ORDER BY Mes",
+
 stockAlerts:()=>"SELECT TOP 500 S.Articulo,S.Total_Stock,S.Cercu,S.Leona,S.Lucum,S.Chinco,S.Bodega,ISNULL(V.Sold,0) AS Sold,ISNULL(D.Costo,0) AS Costo FROM(SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) AS Articulo,SUM(EXISTENCIA) AS Total_Stock,SUM(CASE WHEN Store='Circunvalacion' THEN EXISTENCIA ELSE 0 END) AS Cercu,SUM(CASE WHEN Store='Leona' THEN EXISTENCIA ELSE 0 END) AS Leona,SUM(CASE WHEN Store='Lecumberri' THEN EXISTENCIA ELSE 0 END) AS Lucum,SUM(CASE WHEN Store='Chinconcuac' THEN EXISTENCIA ELSE 0 END) AS Chinco,SUM(CASE WHEN Store='Bodega' THEN EXISTENCIA ELSE 0 END) AS Bodega FROM(SELECT Articulo,EXISTENCIA,'Circunvalacion' AS Store FROM PRODS_C UNION ALL SELECT Articulo,EXISTENCIA,'Leona' FROM PRODS_L UNION ALL SELECT Articulo,EXISTENCIA,'Chinconcuac' FROM PRODS_CHIN UNION ALL SELECT Articulo,EXISTENCIA,'Lecumberri' FROM PRODS_LECU UNION ALL SELECT Articulo,EXISTENCIA,'Bodega' FROM SAP_CC)P GROUP BY LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1))S LEFT JOIN(SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) AS Articulo,SUM(Cantidad) AS Sold FROM(SELECT Articulo,Cantidad FROM MOVS_CIRCUNVALACION WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT Articulo,Cantidad FROM MOVS_LEONA WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT Articulo,Cantidad FROM MOVS_LECUMBERRI WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT Articulo,Cantidad FROM MOVS_CHINCONCUAC WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}'))MV GROUP BY LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1))V ON S.Articulo=V.Articulo LEFT JOIN(SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) AS Articulo,ROUND(MAX(Costo),0) AS Costo FROM SAP_CC GROUP BY LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1))D ON S.Articulo=D.Articulo WHERE S.Total_Stock>0 ORDER BY ISNULL(V.Sold,0) ASC,S.Total_Stock DESC",
 
 predictionData:()=>"SELECT Fecha,SUM(Total_Sale) AS Total_Sale,SUM(Tickets) AS Tickets FROM(SELECT CONVERT(VARCHAR(10),FECHA,23) AS Fecha,ROUND(SUM(Cantidad*Precio_Venta),0) AS Total_Sale,COUNT(DISTINCT NO_REFEREN) AS Tickets FROM MOVS_CIRCUNVALACION WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') GROUP BY CONVERT(VARCHAR(10),FECHA,23) UNION ALL SELECT CONVERT(VARCHAR(10),FECHA,23),ROUND(SUM(Cantidad*Precio_Venta),0),COUNT(DISTINCT NO_REFEREN) FROM MOVS_LEONA WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') GROUP BY CONVERT(VARCHAR(10),FECHA,23) UNION ALL SELECT CONVERT(VARCHAR(10),FECHA,23),ROUND(SUM(Cantidad*Precio_Venta),0),COUNT(DISTINCT NO_REFEREN) FROM MOVS_LECUMBERRI WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') GROUP BY CONVERT(VARCHAR(10),FECHA,23) UNION ALL SELECT CONVERT(VARCHAR(10),FECHA,23),ROUND(SUM(Cantidad*Precio_Venta),0),COUNT(DISTINCT NO_REFEREN) FROM MOVS_CHINCONCUAC WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') GROUP BY CONVERT(VARCHAR(10),FECHA,23))X GROUP BY Fecha ORDER BY Fecha",
@@ -389,16 +391,17 @@ async function processExcelPhotos(arrayBuffer,fileName,onProgress){
 window.processExcelPhotos=processExcelPhotos;
 
 /* ---- Sales Report exports: styled xlsx and print-ready PDF ---- */
-var RS_COLS=[["Item","Articulo",14],["Cercu Pcs","Cercu_Sales",10],["Jazmin Pcs","Jazmin_Sales",10],["Leona Pcs","Leona_Sales",10],["Lecum Pcs","Lecum_Sales",10],["Chinco Pcs","Chinco_Sales",10],["Total Pcs","Total_Sales",10],["Revenue","Total_Revenue",12],["Avg Price","Avg_Price",10],["Cost","Cost",10],["Profit/Pc","Profit_Per_Pz",10],["Net Profit","Net_Profit",12],["St.Cercu","Cercu_Stock",9],["St.Leona","Leona_Stock",9],["St.Lecum","Lecum_Stock",9],["St.Chinco","Chinco_Stock",9],["St.Bodega","Bodega_Stock",9],["St.Total","Total_Stock",9]];
-async function exportSalesReportXLSX(rows,from,to){
+var RS_COLS=[["Item","Articulo",14],["Cercu Pcs","Cercu_Sales",10],["Jazmin Pcs","Jazmin_Sales",10],["Leona Pcs","Leona_Sales",10],["Lecum Pcs","Lecum_Sales",10],["Chinco Pcs","Chinco_Sales",10],["Total Pcs","Total_Sales",10],["Revenue","Total_Revenue",12],["% Sales","__pct",9],["Avg Price","Avg_Price",10],["Cost","Cost",10],["Profit/Pc","Profit_Per_Pz",10],["Net Profit","Net_Profit",12],["St.Cercu","Cercu_Stock",9],["St.Leona","Leona_Stock",9],["St.Lecum","Lecum_Stock",9],["St.Chinco","Chinco_Stock",9],["St.Bodega","Bodega_Stock",9],["St.Total","Total_Stock",9]];
+async function exportSalesReportXLSX(rows,from,to,grand){
+  grand=grand||rows.reduce(function(s,r){return s+nr(r.Total_Revenue)},0);
   if(!rows||!rows.length)return null;
   var XL=await loadExcelJS();
   var wb=new XL.Workbook();
   var ws=wb.addWorksheet("Sales Report");
-  ws.mergeCells("A1:R1");
+  ws.mergeCells("A1:S1");
   ws.getCell("A1").value="SAHIBA CENTRO — SALES REPORT";
   ws.getCell("A1").font={bold:true,size:14,color:{argb:"FF6366F1"}};
-  ws.mergeCells("A2:R2");
+  ws.mergeCells("A2:S2");
   ws.getCell("A2").value="Period: "+from+" to "+to+"  ·  Generated: "+todayLocal();
   ws.getCell("A2").font={size:10,color:{argb:"FF64748B"}};
   var HDR=4;
@@ -413,15 +416,16 @@ async function exportSalesReportXLSX(rows,from,to){
   rows.forEach(function(r,ri){
     var row=ws.getRow(HDR+1+ri);
     RS_COLS.forEach(function(c,i){
-      row.getCell(i+1).value=(i===0?r[c[1]]:nr(r[c[1]]));
+      row.getCell(i+1).value=(i===0?r[c[1]]:(c[1]==="__pct"?(grand>0?nr(r.Total_Revenue)/grand:0):nr(r[c[1]])));
       if(i>0)row.getCell(i+1).alignment={horizontal:"right"};
     });
   });
-  [8,9,10,11,12].forEach(function(ci){ws.getColumn(ci).numFmt='"$"#,##0'});
+  [8,10,11,12,13].forEach(function(ci){ws.getColumn(ci).numFmt='"$"#,##0'});
+  ws.getColumn(9).numFmt="0.0%";
   var TOT=HDR+rows.length+1;
   ws.getRow(TOT).getCell(1).value="TOTAL";
   ws.getRow(TOT).getCell(1).font={bold:true};
-  [2,3,4,5,6,7,8,12,13,14,15,16,17,18].forEach(function(ci){
+  [2,3,4,5,6,7,8,9,13,14,15,16,17,18,19].forEach(function(ci){
     var L=colNameFromNum(ci);
     var c2=ws.getRow(TOT).getCell(ci);
     c2.value={formula:"SUM("+L+String(HDR+1)+":"+L+String(TOT-1)+")"};
@@ -434,7 +438,8 @@ async function exportSalesReportXLSX(rows,from,to){
   downloadBlob(blob,"sales_report_"+from+"_"+to+".xlsx");
   return blob;
 }
-function buildSalesReportHTML(rows,from,to){
+function buildSalesReportHTML(rows,from,to,grand){
+  grand=grand||rows.reduce(function(s,r){return s+nr(r.Total_Revenue)},0);
   var totPcs=rows.reduce(function(s,r){return s+nr(r.Total_Sales)},0);
   var totRev=rows.reduce(function(s,r){return s+nr(r.Total_Revenue)},0);
   var totProfit=rows.reduce(function(s,r){return s+nr(r.Net_Profit)},0);
@@ -469,17 +474,17 @@ function buildSalesReportHTML(rows,from,to){
     '<div class="card c2"><div class="label">Total Pieces</div><div class="value">'+totPcs.toLocaleString("en-US")+'</div></div>'+
     '<div class="card c3"><div class="label">Revenue</div><div class="value">'+money(totRev)+'</div></div>'+
     '<div class="card c4"><div class="label">Net Profit</div><div class="value">'+money(totProfit)+'</div></div>'+
-    '</div><table><thead><tr><th>Item</th><th>Cercu</th><th>Jazmin</th><th>Leona</th><th>Lecum</th><th>Chinco</th><th>Total Pcs</th><th>Revenue</th><th>Avg</th><th>Cost</th><th>P/Pc</th><th>Net Profit</th><th>Stock</th></tr></thead><tbody>';
+    '</div><table><thead><tr><th>Item</th><th>Cercu</th><th>Jazmin</th><th>Leona</th><th>Lecum</th><th>Chinco</th><th>Total Pcs</th><th>Revenue</th><th>% Sales</th><th>Avg</th><th>Cost</th><th>P/Pc</th><th>Net Profit</th><th>Stock</th></tr></thead><tbody>';
   rows.forEach(function(r){
-    html+='<tr><td>'+(r.Articulo||"")+'</td><td>'+nr(r.Cercu_Sales)+'</td><td>'+nr(r.Jazmin_Sales)+'</td><td>'+nr(r.Leona_Sales)+'</td><td>'+nr(r.Lecum_Sales)+'</td><td>'+nr(r.Chinco_Sales)+'</td><td>'+nr(r.Total_Sales)+'</td><td>'+money(nr(r.Total_Revenue))+'</td><td>'+money(nr(r.Avg_Price))+'</td><td>'+money(nr(r.Cost))+'</td><td>'+money(nr(r.Profit_Per_Pz))+'</td><td>'+money(nr(r.Net_Profit))+'</td><td>'+nr(r.Total_Stock)+'</td></tr>';
+    html+='<tr><td>'+(r.Articulo||"")+'</td><td>'+nr(r.Cercu_Sales)+'</td><td>'+nr(r.Jazmin_Sales)+'</td><td>'+nr(r.Leona_Sales)+'</td><td>'+nr(r.Lecum_Sales)+'</td><td>'+nr(r.Chinco_Sales)+'</td><td>'+nr(r.Total_Sales)+'</td><td>'+money(nr(r.Total_Revenue))+'</td><td>'+(grand>0?(nr(r.Total_Revenue)/grand*100).toFixed(1):"0.0")+'%</td><td>'+money(nr(r.Avg_Price))+'</td><td>'+money(nr(r.Cost))+'</td><td>'+money(nr(r.Profit_Per_Pz))+'</td><td>'+money(nr(r.Net_Profit))+'</td><td>'+nr(r.Total_Stock)+'</td></tr>';
   });
-  html+='<tr class="total-row"><td>TOTAL</td><td>'+rows.reduce(function(s,r){return s+nr(r.Cercu_Sales)},0)+'</td><td>'+rows.reduce(function(s,r){return s+nr(r.Jazmin_Sales)},0)+'</td><td>'+rows.reduce(function(s,r){return s+nr(r.Leona_Sales)},0)+'</td><td>'+rows.reduce(function(s,r){return s+nr(r.Lecum_Sales)},0)+'</td><td>'+rows.reduce(function(s,r){return s+nr(r.Chinco_Sales)},0)+'</td><td>'+totPcs+'</td><td>'+money(totRev)+'</td><td></td><td></td><td></td><td>'+money(totProfit)+'</td><td>'+totStock+'</td></tr>';
+  html+='<tr class="total-row"><td>TOTAL</td><td>'+rows.reduce(function(s,r){return s+nr(r.Cercu_Sales)},0)+'</td><td>'+rows.reduce(function(s,r){return s+nr(r.Jazmin_Sales)},0)+'</td><td>'+rows.reduce(function(s,r){return s+nr(r.Leona_Sales)},0)+'</td><td>'+rows.reduce(function(s,r){return s+nr(r.Lecum_Sales)},0)+'</td><td>'+rows.reduce(function(s,r){return s+nr(r.Chinco_Sales)},0)+'</td><td>'+totPcs+'</td><td>'+money(totRev)+'</td><td>'+(grand>0?(totRev/grand*100).toFixed(1):"0.0")+'%</td><td></td><td></td><td></td><td>'+money(totProfit)+'</td><td>'+totStock+'</td></tr>';
   html+='</tbody></table><div class="footer">SAHIBA CENTRO • Auto-generated report • '+new Date().toLocaleString("en-US")+'</div></body></html>';
   return html;
 }
-function exportSalesReportPDF(rows,from,to){
+function exportSalesReportPDF(rows,from,to,grand){
   if(!rows||!rows.length)return;
-  var html=buildSalesReportHTML(rows,from,to);
+  var html=buildSalesReportHTML(rows,from,to,grand);
   var w=window.open("","_blank");
   if(w){w.document.write(html);w.document.close();setTimeout(function(){w.print()},500);}
   else{downloadBlob(new Blob([html],{type:"text/html"}),"sales_report_"+from+"_"+to+".html");}
@@ -918,6 +923,9 @@ var qYB=useQuery(SQL.yazminBigTickets(),{fecha_inicio:yfd1,fecha_fin:yfd2},[yfd1
 
 var rsfd1=fmtD(rsFrom),rsfd2=fmtD(rsTo);
 var qRS=useQuery(SQL.regularSales(),{fecha1:rsfd1,fecha2:rsfd2},[rsfd1,rsfd2,"rs",tab==="report"],tab==="report");
+var s85=st("report"),rsView=s85[0],setRsView=s85[1];
+var rsAnOn=tab==="report"&&rsView==="analysis";
+var qMS=useQuery(SQL.monthlySales(),{fecha1:rsfd1,fecha2:rsfd2},[rsfd1,rsfd2,"ms",rsAnOn],rsAnOn);
 
 var doKardex=cb(function(){
   if(!kardexArt.trim())return;setKardexLoading(true);setKardexErr(null);setKardexData(null);
@@ -1025,12 +1033,12 @@ tab==="inventory"&&h(Panel,null,h(SH,{icon:Ic.Pkg,title:"Inventory by Store",sub
 
 // REGULAR SALES REPORT
 tab==="report"&&h(React.Fragment,null,
-  h(Panel,{style:{marginBottom:20}},h(SH,{icon:Ic.Trd,title:"Regular Sales Report",sub:"Sales by store + inventory + profit",action:(function(){var _rsRows=(qRS.data||[]).filter(function(r){var q=rsSearch.toLowerCase();return!q||String(r.Articulo||"").toLowerCase().includes(q)});return h("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},h(CSVBtn,{rows:_rsRows,name:"sales_report"}),_rsRows.length>0&&h("button",{onClick:function(){exportSalesReportXLSX(_rsRows,rsFrom,rsTo)},style:{padding:"7px 14px",borderRadius:10,border:"1px solid "+T.border,background:"rgba(99,102,241,.08)",color:T.pr,fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}},"⤓ Excel"),_rsRows.length>0&&h("button",{onClick:function(){exportSalesReportPDF(_rsRows,rsFrom,rsTo)},style:{padding:"7px 14px",borderRadius:10,border:"1px solid "+T.border,background:"rgba(239,68,68,.08)",color:T.rd,fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}},"📄 PDF"))})(),gradient:"linear-gradient(135deg,#f59e0b,#fbbf24)"}),
+  h(Panel,{style:{marginBottom:20}},h(SH,{icon:Ic.Trd,title:"Regular Sales Report",sub:"Sales by store + inventory + profit",action:(function(){var _rsRows=(qRS.data||[]).filter(function(r){var q=rsSearch.toLowerCase();return!q||String(r.Articulo||"").toLowerCase().includes(q)});var _rsG=(qRS.data||[]).reduce(function(s,x){return s+nr(x.Total_Revenue)},0);return h("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},h(CSVBtn,{rows:_rsRows,name:"sales_report"}),_rsRows.length>0&&h("button",{onClick:function(){exportSalesReportXLSX(_rsRows,rsFrom,rsTo,_rsG)},style:{padding:"7px 14px",borderRadius:10,border:"1px solid "+T.border,background:"rgba(99,102,241,.08)",color:T.pr,fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}},"⤓ Excel"),_rsRows.length>0&&h("button",{onClick:function(){exportSalesReportPDF(_rsRows,rsFrom,rsTo,_rsG)},style:{padding:"7px 14px",borderRadius:10,border:"1px solid "+T.border,background:"rgba(239,68,68,.08)",color:T.rd,fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}},"📄 PDF"))})(),gradient:"linear-gradient(135deg,#f59e0b,#fbbf24)"}),
     h("div",{style:{display:"flex",gap:14,flexWrap:"wrap",alignItems:"flex-end",marginBottom:14}},
       h("div",null,h("label",{style:{fontSize:10,color:T.pr,display:"block",marginBottom:4,fontWeight:700,textTransform:"uppercase",letterSpacing:1}},"From"),h("input",{type:"date",value:rsFrom,onChange:function(e){setRsFrom(e.target.value)},style:{padding:"8px 14px",border:"1px solid "+T.border,borderRadius:10,fontSize:13,fontFamily:"inherit",outline:"none"}})),
       h("div",null,h("label",{style:{fontSize:10,color:T.pr,display:"block",marginBottom:4,fontWeight:700,textTransform:"uppercase",letterSpacing:1}},"To"),h("input",{type:"date",value:rsTo,onChange:function(e){setRsTo(e.target.value)},style:{padding:"8px 14px",border:"1px solid "+T.border,borderRadius:10,fontSize:13,fontFamily:"inherit",outline:"none"}})),h(Presets,{onPick:function(f,t){setRsFrom(f);setRsTo(t)}}),
-      h("div",{style:{display:"flex",alignItems:"center",gap:6,padding:"7px 12px",background:"rgba(99,102,241,.04)",borderRadius:10,border:"1px solid "+T.border}},h(Ic.Sch,{s:12,c:T.pr}),h("input",{placeholder:"Search item...",value:rsSearch,onChange:function(e){setRsSearch(e.target.value)},style:{background:"transparent",border:"none",color:T.tx,fontSize:12,outline:"none",width:140,fontFamily:"inherit"}})))),
-  h(Panel,null,qRS.loading?h(Loading):qRS.error?h(Err,{msg:qRS.error}):h(React.Fragment,null,
+      h("div",{style:{display:"flex",alignItems:"center",gap:6,padding:"7px 12px",background:"rgba(99,102,241,.04)",borderRadius:10,border:"1px solid "+T.border}},h(Ic.Sch,{s:12,c:T.pr}),h("input",{placeholder:"Search item...",value:rsSearch,onChange:function(e){setRsSearch(e.target.value)},style:{background:"transparent",border:"none",color:T.tx,fontSize:12,outline:"none",width:140,fontFamily:"inherit"}}))),h("div",{style:{display:"flex",gap:4}},h(TabBtn,{active:rsView==="report",label:"Report Table",onClick:function(){setRsView("report")}}),h(TabBtn,{active:rsView==="analysis",label:"Analysis",onClick:function(){setRsView("analysis")}}))),
+  rsView==="report"&&h(Panel,null,qRS.loading?h(Loading):qRS.error?h(Err,{msg:qRS.error}):h(React.Fragment,null,
     qRS.data&&h("div",{style:{marginBottom:12,display:"flex",gap:16,flexWrap:"wrap"}},
       h("div",{style:{padding:"10px 18px",borderRadius:12,background:"linear-gradient(135deg,#f5f3ff,#ede9fe)"}},h("div",{style:{fontSize:9,color:T.pu,fontWeight:700,textTransform:"uppercase"}},"Items"),h("div",{style:{fontSize:20,fontWeight:800,color:T.tx}},fN(qRS.data.filter(function(r){var q=rsSearch.toLowerCase();return!q||String(r.Articulo||"").toLowerCase().includes(q)}).length))),
       h("div",{style:{padding:"10px 18px",borderRadius:12,background:"linear-gradient(135deg,#eef2ff,#e0e7ff)"}},h("div",{style:{fontSize:9,color:T.pr,fontWeight:700,textTransform:"uppercase"}},"Total Pcs"),h("div",{style:{fontSize:20,fontWeight:800,color:T.tx}},fN(qRS.data.filter(function(r){var q=rsSearch.toLowerCase();return!q||String(r.Articulo||"").toLowerCase().includes(q)}).reduce(function(s,r){return s+nr(r.Total_Sales)},0)))),
@@ -1044,7 +1052,7 @@ tab==="report"&&h(React.Fragment,null,
       {header:"Lecum",key:"Lecum_Sales",align:"right",mono:true},
       {header:"Chinco",key:"Chinco_Sales",align:"right",mono:true},
       {header:"Total",key:"Total_Sales",align:"right",mono:true,bold:true},
-      {header:"Revenue",align:"right",mono:true,render:function(r){return fmt(nr(r.Total_Revenue))},color:function(){return T.pu}},
+      {header:"Revenue",align:"right",mono:true,render:function(r){return fmt(nr(r.Total_Revenue))},color:function(){return T.pu}},{header:"% Sales",align:"right",render:function(r){var g=(qRS.data||[]).reduce(function(s,x){return s+nr(x.Total_Revenue)},0);var p=g>0?(nr(r.Total_Revenue)/g*100):0;return h("span",{style:{fontSize:11,padding:"3px 8px",borderRadius:6,fontWeight:700,background:p>=5?"linear-gradient(135deg,#f5f3ff,#ede9fe)":"#f1f5f9",color:p>=5?T.pu:T.tt}},p.toFixed(1)+"%")}},
       {header:"Price",align:"right",mono:true,render:function(r){return fmt(nr(r.Avg_Price))}},
       {header:"Cost",align:"right",mono:true,render:function(r){return fmt(nr(r.Cost))},color:function(){return T.tt}},
       {header:"Profit/Pc",align:"right",mono:true,render:function(r){return fmt(nr(r.Profit_Per_Pz))},color:function(){return T.gn}},
@@ -1055,7 +1063,116 @@ tab==="report"&&h(React.Fragment,null,
       {header:"St.Ch",key:"Chinco_Stock",align:"right",mono:true},
       {header:"Bodega",key:"Bodega_Stock",align:"right",mono:true,color:function(){return T.am}},
       {header:"St.Tot",key:"Total_Stock",align:"right",mono:true,bold:true},
-    ],data:(qRS.data||[]).filter(function(r){var q=rsSearch.toLowerCase();return!q||String(r.Articulo||"").toLowerCase().includes(q)})})))),
+    ],data:(qRS.data||[]).filter(function(r){var q=rsSearch.toLowerCase();return!q||String(r.Articulo||"").toLowerCase().includes(q)})}))),
+  rsView==="analysis"&&(qRS.loading?h(Panel,null,h(Loading)):qRS.error?h(Panel,null,h(Err,{msg:qRS.error})):(function(){
+    var rows=qRS.data||[];
+    if(!rows.length)return h(Panel,null,h("div",{style:{textAlign:"center",padding:44,color:T.tt,fontSize:13}},"No sales in this period"));
+    var days=Math.max(1,Math.round((parseLocalDate(rsTo)-parseLocalDate(rsFrom))/86400000)+1);
+    var months=Math.max(days/30.44,0.03);
+    var totP=0,totR=0,totProf=0,totStock=0,cerc=0,jaz=0,leo=0,lec=0,chi=0;
+    var missCostRev=0,missCostArts=0,negStock=[];
+    rows.forEach(function(r){
+      var p=nr(r.Total_Sales),rev=nr(r.Total_Revenue);
+      totP+=p;totR+=rev;totProf+=nr(r.Net_Profit);totStock+=Math.max(0,nr(r.Total_Stock));
+      cerc+=nr(r.Cercu_Sales);jaz+=nr(r.Jazmin_Sales);leo+=nr(r.Leona_Sales);lec+=nr(r.Lecum_Sales);chi+=nr(r.Chinco_Sales);
+      if(nr(r.Cost)<=0&&rev>0){missCostRev+=rev;missCostArts++;}
+      if(nr(r.Total_Stock)<0)negStock.push(r.Articulo);
+    });
+    var avgMonthlyP=Math.round(totP/months);
+    var enrich=function(r){var p=nr(r.Total_Sales),st2=Math.max(0,nr(r.Total_Stock));
+      return{art:r.Articulo,p:p,rev:nr(r.Total_Revenue),avg:nr(r.Avg_Price),cost:nr(r.Cost),ppc:nr(r.Profit_Per_Pz),prof:nr(r.Net_Profit),stock:nr(r.Total_Stock),
+        pShare:totP>0?p/totP*100:0,rShare:totR>0?nr(r.Total_Revenue)/totR*100:0,
+        margin:nr(r.Total_Revenue)>0?nr(r.Net_Profit)/nr(r.Total_Revenue)*100:0,
+        sellThrough:(p+st2)>0?p/(p+st2)*100:0,
+        coverage:p>0?st2/(p/months):(st2>0?999:0)};};
+    var E=rows.map(enrich);
+    var top10P=E.slice().sort(function(a,b){return b.p-a.p}).slice(0,10);
+    var t10p=top10P.reduce(function(s,r){return s+r.p},0),t10r=top10P.reduce(function(s,r){return s+r.rev},0),t10prof=top10P.reduce(function(s,r){return s+r.prof},0);
+    var topProfit=E.filter(function(r){return r.cost>0}).sort(function(a,b){return b.prof-a.prof}).slice(0,10);
+    var reorder=E.filter(function(r){return r.cost>0&&r.p>=100&&r.coverage<=0.5&&r.stock>=0}).sort(function(a,b){return a.coverage-b.coverage}).slice(0,8);
+    var reduce_=E.filter(function(r){return r.coverage>=12&&r.stock>=200}).sort(function(a,b){return b.coverage-a.coverage}).slice(0,8);
+    var watch=E.filter(function(r){return r.pShare>=20});
+    var unreliable=totR>0&&missCostRev/totR>0.05;
+    var locs=[{name:"Cercu",v:cerc},{name:"Jazmin",v:jaz},{name:"Leona",v:leo},{name:"Lecum",v:lec},{name:"Chinco",v:chi}].filter(function(l){return l.v>0});
+    var totLoc=locs.reduce(function(s,l){return s+l.v},0);
+    var pieLoc=locs.map(function(l,i){return{name:l.name,value:l.v,color:SC[i%SC.length]}});
+    var barData=top10P.map(function(r){return{article:r.art,share:Math.round(r.pShare*10)/10}});
+    var covTxt=function(c){return c>=999?"∞":c>=1?c.toFixed(1)+" mo":Math.round(c*30.44)+" days"};
+    var pctB=function(p,hi){return h("span",{style:{fontSize:11,padding:"3px 8px",borderRadius:6,fontWeight:700,background:p>=hi?"linear-gradient(135deg,#f5f3ff,#ede9fe)":"#f1f5f9",color:p>=hi?T.pu:T.tt}},p.toFixed(1)+"%")};
+    return h(React.Fragment,null,
+      h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:16,marginBottom:20}},
+        h(KPI,{icon:Ic.Cart,label:"Pieces Sold",value:fN(totP),sub:fN(avgMonthlyP)+"/month avg · "+months.toFixed(1)+" months",kpiStyle:0,delay:1}),
+        h(KPI,{icon:Ic.Dol,label:"Revenue",value:fmt(totR),sub:fN(rows.length)+" styles",kpiStyle:1,delay:2}),
+        h(KPI,{icon:Ic.Trd,label:"Net Profit",value:fmt(totProf),sub:unreliable?"⚠ not fully verified (missing costs)":(totR>0?(totProf/totR*100).toFixed(1):0)+"% margin",kpiStyle:2,delay:3}),
+        h(KPI,{icon:Ic.Pkg,label:"Current Stock",value:fN(totStock),sub:"≈ "+covTxt(totP>0?totStock/(totP/months):999)+" of sales",kpiStyle:3,delay:4})),
+      (missCostArts>0||negStock.length>0)&&h("div",{style:{marginBottom:20,padding:"14px 20px",borderRadius:12,background:"linear-gradient(135deg,#fffbeb,#fef3c7)",border:"1px solid rgba(245,158,11,.25)",fontSize:12.5,color:"#92400e"}},
+        h("div",{style:{fontWeight:800,marginBottom:4}},"⚠ Data quality"),
+        missCostArts>0&&h("div",null,fN(missCostArts)+" styles sold with no recorded cost — "+fmt(missCostRev)+" of revenue ("+(totR>0?(missCostRev/totR*100).toFixed(1):0)+"%). Profit on these styles is not verified; add costs in SAP_CC to fix."),
+        negStock.length>0&&h("div",{style:{marginTop:4}},fN(negStock.length)+" styles show negative stock: "+negStock.slice(0,8).join(", ")+(negStock.length>8?"…":"")+" — inventory records need correction.")),
+      h("div",{style:{display:"grid",gridTemplateColumns:"3fr 2fr",gap:20,marginBottom:20}},
+        h(Panel,null,h(SH,{icon:Ic.Bar,title:"Top 10 — Share of Pieces Sold",sub:"Concentration of sales by style",gradient:"linear-gradient(135deg,#8b5cf6,#a78bfa)"}),
+          h(ResponsiveContainer,{width:"100%",height:300},h(BarChart,{data:barData,layout:"vertical",margin:{left:70,right:20}},
+            h(CartesianGrid,{stroke:T.bL,horizontal:false}),
+            h(XAxis,{type:"number",tick:{fill:T.tt,fontSize:10},axisLine:false,tickLine:false,tickFormatter:function(v){return v+"%"}}),
+            h(YAxis,{type:"category",dataKey:"article",tick:{fill:T.ts,fontSize:10,fontWeight:600},axisLine:false,tickLine:false,width:70}),
+            h(Tooltip,{formatter:function(v){return v+"% of pieces"}}),
+            h(Bar,{dataKey:"share",fill:"#8b5cf6",radius:[0,8,8,0],barSize:16}))),
+          h("div",{style:{marginTop:10,fontSize:12,color:T.ts,fontWeight:600}},"Top 10 = "+(totP>0?(t10p/totP*100).toFixed(1):0)+"% of pieces · "+(totR>0?(t10r/totR*100).toFixed(1):0)+"% of revenue · "+(totProf>0?(t10prof/totProf*100).toFixed(1):0)+"% of profit"),
+          top10P.length>0&&top10P[0].pShare>30&&h("div",{style:{marginTop:6,fontSize:12,color:T.rd,fontWeight:700}},"⚠ Risk: sales depend heavily on "+top10P[0].art+" ("+top10P[0].pShare.toFixed(1)+"% of all pieces)")),
+        h(Panel,null,h(SH,{icon:Ic.Str,title:"Pieces by Location",gradient:"linear-gradient(135deg,#ec4899,#f472b6)"}),
+          pieLoc.length>0&&h(ResponsiveContainer,{width:"100%",height:210},h(PieChart,null,h(Pie,{data:pieLoc,cx:"50%",cy:"50%",innerRadius:50,outerRadius:80,dataKey:"value",stroke:"none",paddingAngle:3},pieLoc.map(function(d,i){return h(Cell,{key:i,fill:d.color})})),h(Tooltip,{formatter:function(v){return fN(v)+" pcs"}}))),
+          h("div",{style:{display:"flex",flexWrap:"wrap",gap:8,marginTop:10}},pieLoc.map(function(l,i){return h("div",{key:i,style:{display:"flex",alignItems:"center",gap:5,fontSize:11,color:T.ts,padding:"4px 10px",background:l.color+"10",borderRadius:8}},h("div",{style:{width:8,height:8,borderRadius:3,background:l.color}}),l.name+" "+fN(l.value)+" ("+(totLoc>0?(l.value/totLoc*100).toFixed(1):0)+"%)")}))),
+      ),
+      h(Panel,{style:{marginBottom:20}},h(SH,{icon:Ic.Trd,title:"Monthly Sales Trend",sub:rsFrom+" to "+rsTo,gradient:"linear-gradient(135deg,#06b6d4,#22d3ee)"}),
+        qMS.loading?h(Loading):qMS.error?h(Err,{msg:qMS.error}):(qMS.data&&qMS.data.length>0)?h(React.Fragment,null,
+          qMS.data.length>1&&h(ResponsiveContainer,{width:"100%",height:220},h(AreaChart,{data:qMS.data},
+            h("defs",null,h("linearGradient",{id:"mg",x1:"0",y1:"0",x2:"0",y2:"1"},h("stop",{offset:"0%",stopColor:"#06b6d4",stopOpacity:.25}),h("stop",{offset:"100%",stopColor:"#06b6d4",stopOpacity:0}))),
+            h(CartesianGrid,{stroke:T.bL}),
+            h(XAxis,{dataKey:"Mes",tick:{fill:T.tt,fontSize:10},axisLine:false,tickLine:false}),
+            h(YAxis,{tick:{fill:T.tt,fontSize:10},axisLine:false,tickLine:false,tickFormatter:function(v){return"$"+Math.round(v/1000)+"k"}}),
+            h(Tooltip,{content:h(CTip,null)}),
+            h(Area,{type:"monotone",dataKey:"Rev",stroke:"#06b6d4",fill:"url(#mg)",strokeWidth:2.5,name:"Revenue"}))),
+          h("div",{style:{marginTop:12}},h(DT,{columns:[
+            {header:"Month",key:"Mes",mono:true,bold:true},
+            {header:"Pieces",align:"right",mono:true,render:function(r){return fN(nr(r.Pcs))}},
+            {header:"Revenue",align:"right",mono:true,render:function(r){return fmt(nr(r.Rev))},color:function(){return T.pu}},
+            {header:"Avg $/Pc",align:"right",mono:true,render:function(r){return nr(r.Pcs)>0?fmt(nr(r.Rev)/nr(r.Pcs)):"—"}}
+          ],data:qMS.data}))):h("div",{style:{textAlign:"center",padding:20,color:T.tt,fontSize:12}},"No monthly data")),
+      h(Panel,{style:{marginBottom:20}},h(SH,{icon:Ic.Cart,title:"Top 10 by Pieces Sold",gradient:"linear-gradient(135deg,#8b5cf6,#a78bfa)"}),
+        h(DT,{columns:[
+          {header:"#",align:"center",render:function(r,i){return h("span",{style:{display:"inline-flex",alignItems:"center",justifyContent:"center",width:24,height:24,borderRadius:8,background:i<3?"linear-gradient(135deg,#f59e0b,#fbbf24)":"#f0f4ff",color:i<3?"#fff":T.ts,fontSize:11,fontWeight:700}},i+1)}},
+          imgCol,
+          {header:"Style",key:"art",mono:true,bold:true,color:function(){return T.pr}},
+          {header:"Pieces",align:"right",mono:true,bold:true,render:function(r){return fN(r.p)}},
+          {header:"% Pieces",align:"right",render:function(r){return pctB(r.pShare,10)}},
+          {header:"Revenue",align:"right",mono:true,render:function(r){return fmt(r.rev)},color:function(){return T.pu}},
+          {header:"% Revenue",align:"right",render:function(r){return pctB(r.rShare,10)}},
+          {header:"Stock",align:"right",mono:true,render:function(r){return fN(r.stock)}},
+          {header:"Sell-through",align:"right",render:function(r){return h("span",{style:{fontWeight:700,color:r.sellThrough>=70?T.gn:r.sellThrough>=40?T.am:T.rd,fontSize:12}},r.sellThrough.toFixed(0)+"%")}},
+          {header:"Coverage",align:"right",mono:true,render:function(r){return covTxt(r.coverage)}}
+        ],data:top10P})),
+      h(Panel,{style:{marginBottom:20}},h(SH,{icon:Ic.Dol,title:"Top 10 by Net Profit",sub:"Only styles with a recorded cost",gradient:"linear-gradient(135deg,#10b981,#34d399)"}),
+        h(DT,{columns:[imgCol,
+          {header:"Style",key:"art",mono:true,bold:true,color:function(){return T.pr}},
+          {header:"Pieces",align:"right",mono:true,render:function(r){return fN(r.p)}},
+          {header:"Revenue",align:"right",mono:true,render:function(r){return fmt(r.rev)},color:function(){return T.pu}},
+          {header:"Avg Price",align:"right",mono:true,render:function(r){return fmt(r.avg)}},
+          {header:"Cost",align:"right",mono:true,render:function(r){return fmt(r.cost)},color:function(){return T.tt}},
+          {header:"Profit/Pc",align:"right",mono:true,render:function(r){return fmt(r.ppc)},color:function(){return T.gn}},
+          {header:"Net Profit",align:"right",mono:true,bold:true,render:function(r){return fmt(r.prof)},color:function(){return T.gn}},
+          {header:"Margin",align:"right",render:function(r){return h(PBadge,{value:r.margin})}},
+          {header:"Stock",align:"right",mono:true,render:function(r){return fN(r.stock)}},
+          {header:"Coverage",align:"right",mono:true,render:function(r){return covTxt(r.coverage)}}
+        ],data:topProfit,empty:"No styles with recorded cost"})),
+      h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:20}},
+        h(Panel,null,h(SH,{icon:Ic.Sp,title:"Reorder Urgently",sub:"Strong sellers ≤ 2 weeks of stock",gradient:"linear-gradient(135deg,#ef4444,#f87171)"}),
+          reorder.length?reorder.map(function(r){return h("div",{key:r.art,style:{padding:"9px 12px",marginBottom:6,borderRadius:10,background:"#fef2f2",fontSize:12}},h("span",{style:{fontWeight:800,color:T.rd,fontFamily:"'JetBrains Mono',monospace"}},r.art),h("span",{style:{color:T.tt}}," — "+fN(r.p)+" sold, stock "+fN(r.stock)+" ≈ "+covTxt(r.coverage)))}):h("div",{style:{color:T.tt,fontSize:12,padding:10}},"None — stock levels look healthy")),
+        h(Panel,null,h(SH,{icon:Ic.Ey,title:"Watch Concentration",sub:"Styles ≥ 20% of all pieces",gradient:"linear-gradient(135deg,#8b5cf6,#a78bfa)"}),
+          watch.length?watch.map(function(r){return h("div",{key:r.art,style:{padding:"9px 12px",marginBottom:6,borderRadius:10,background:"#f5f3ff",fontSize:12}},h("span",{style:{fontWeight:800,color:T.pu,fontFamily:"'JetBrains Mono',monospace"}},r.art),h("span",{style:{color:T.tt}}," — "+r.pShare.toFixed(1)+"% of pieces, "+r.rShare.toFixed(1)+"% of revenue. Keep supply steady; a stockout hits totals hard."))}):h("div",{style:{color:T.tt,fontSize:12,padding:10}},"None — sales are well diversified")),
+        h(Panel,null,h(SH,{icon:Ic.Pkg,title:"Reduce Purchases",sub:"≥ 12 months of stock on hand",gradient:"linear-gradient(135deg,#f59e0b,#fbbf24)"}),
+          reduce_.length?reduce_.map(function(r){return h("div",{key:r.art,style:{padding:"9px 12px",marginBottom:6,borderRadius:10,background:"#fffbeb",fontSize:12}},h("span",{style:{fontWeight:800,color:T.am,fontFamily:"'JetBrains Mono',monospace"}},r.art),h("span",{style:{color:T.tt}}," — "+fN(r.p)+" sold vs stock "+fN(r.stock)+" ≈ "+covTxt(r.coverage)+". Consider promotions or transfers."))}):h("div",{style:{color:T.tt,fontSize:12,padding:10}},"None — no significant overstock"))));
+  })())),
+
 
 // KARDEX
 tab==="kardex"&&h(React.Fragment,null,
