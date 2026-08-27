@@ -39,6 +39,11 @@ exports.handler = async (event) => {
       clearTimeout(timer);
     }
     const data = await res.text();
+    // When the ngrok tunnel is down, ngrok answers with its own HTML 404 page.
+    // Translate that into a clear message instead of passing raw HTML to the app.
+    if (!res.ok && /<html/i.test(data) && /ngrok/i.test(data)) {
+      return { statusCode: 503, headers: Object.assign({ "Content-Type": "application/json" }, corsHeaders()), body: JSON.stringify({ status: "error", message: "The store data server is OFFLINE — the ngrok tunnel is not running. Start the tunnel program on the store computer (and check its internet), then refresh this page." }) };
+    }
     return { statusCode: res.status, headers: Object.assign({ "Content-Type": "application/json" }, corsHeaders()), body: data };
   } catch (e) {
     const msg = e.name === "AbortError" ? "The data server did not respond (timeout). Please try again." : e.message;
