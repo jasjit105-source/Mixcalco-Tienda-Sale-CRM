@@ -26,6 +26,7 @@ const CASES = [
   ["yazminBigTickets", SQL.yazminBigTickets(), { fecha_inicio: D1, fecha_fin: D2 }],
   ["regularSales", SQL.regularSales(), { fecha1: D1, fecha2: D2 }],
   ["monthlySales", SQL.monthlySales(), { fecha1: "20260101", fecha2: D2 }],
+  ["missingCost", SQL.missingCost(), { fecha1: "20260601", fecha2: D2 }],
   ["kardex", SQL.kardex("006KA"), { fecha1: D1, fecha2: D2 }],
   ["corteCercu", SQL.corteCercu(), { fecha: D }],
   ["corteLeona", SQL.corteLeona(), { fecha: D }],

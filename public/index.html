@@ -146,6 +146,8 @@ transfersByBank:()=>"SELECT Store,Bank,COUNT(*) AS Tickets,SUM(Sale) AS Sales,SU
 
 monthlySales:()=>"SELECT Mes,SUM(Pcs) AS Pcs,ROUND(SUM(Rev),0) AS Rev FROM(SELECT CONVERT(VARCHAR(7),FECHA,126) AS Mes,Cantidad AS Pcs,Cantidad*Precio_Venta AS Rev FROM MOVS_CIRCUNVALACION WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT CONVERT(VARCHAR(7),FECHA,126),Cantidad,Cantidad*Precio_Venta FROM MOVS_LEONA WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT CONVERT(VARCHAR(7),FECHA,126),Cantidad,Cantidad*Precio_Venta FROM MOVS_LECUMBERRI WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT CONVERT(VARCHAR(7),FECHA,126),Cantidad,Cantidad*Precio_Venta FROM MOVS_CHINCONCUAC WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}'))X GROUP BY Mes ORDER BY Mes",
 
+missingCost:()=>"SELECT TOP 500 U.Articulo,MAX(U.Descripcion) AS Descripcion,SUM(U.Sold) AS Sold,ROUND(SUM(U.Rev),0) AS Revenue,SUM(U.Stock) AS Stock FROM(SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) AS Articulo,Descripcion,Cantidad AS Sold,Cantidad*Precio_Venta AS Rev,0 AS Stock FROM MOVS_CIRCUNVALACION WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1),Descripcion,Cantidad,Cantidad*Precio_Venta,0 FROM MOVS_LEONA WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1),Descripcion,Cantidad,Cantidad*Precio_Venta,0 FROM MOVS_LECUMBERRI WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1),Descripcion,Cantidad,Cantidad*Precio_Venta,0 FROM MOVS_CHINCONCUAC WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1),CAST(NULL AS VARCHAR(200)),0,0,EXISTENCIA FROM PRODS_C UNION ALL SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1),CAST(NULL AS VARCHAR(200)),0,0,EXISTENCIA FROM PRODS_L UNION ALL SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1),CAST(NULL AS VARCHAR(200)),0,0,EXISTENCIA FROM PRODS_LECU UNION ALL SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1),CAST(NULL AS VARCHAR(200)),0,0,EXISTENCIA FROM PRODS_CHIN UNION ALL SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1),CAST(NULL AS VARCHAR(200)),0,0,EXISTENCIA FROM SAP_CC)U LEFT JOIN(SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) AS Articulo,MAX(ISNULL(Costo,0)) AS Costo FROM SAP_CC GROUP BY LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1))C ON U.Articulo=C.Articulo WHERE ISNULL(C.Costo,0)<=0 GROUP BY U.Articulo HAVING SUM(U.Sold)>0 OR SUM(U.Stock)>0 ORDER BY SUM(U.Rev) DESC,SUM(U.Stock) DESC",
+
 stockAlerts:()=>"SELECT TOP 500 S.Articulo,S.Total_Stock,S.Cercu,S.Leona,S.Lucum,S.Chinco,S.Bodega,ISNULL(V.Sold,0) AS Sold,ISNULL(D.Costo,0) AS Costo FROM(SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) AS Articulo,SUM(EXISTENCIA) AS Total_Stock,SUM(CASE WHEN Store='Circunvalacion' THEN EXISTENCIA ELSE 0 END) AS Cercu,SUM(CASE WHEN Store='Leona' THEN EXISTENCIA ELSE 0 END) AS Leona,SUM(CASE WHEN Store='Lecumberri' THEN EXISTENCIA ELSE 0 END) AS Lucum,SUM(CASE WHEN Store='Chinconcuac' THEN EXISTENCIA ELSE 0 END) AS Chinco,SUM(CASE WHEN Store='Bodega' THEN EXISTENCIA ELSE 0 END) AS Bodega FROM(SELECT Articulo,EXISTENCIA,'Circunvalacion' AS Store FROM PRODS_C UNION ALL SELECT Articulo,EXISTENCIA,'Leona' FROM PRODS_L UNION ALL SELECT Articulo,EXISTENCIA,'Chinconcuac' FROM PRODS_CHIN UNION ALL SELECT Articulo,EXISTENCIA,'Lecumberri' FROM PRODS_LECU UNION ALL SELECT Articulo,EXISTENCIA,'Bodega' FROM SAP_CC)P GROUP BY LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1))S LEFT JOIN(SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) AS Articulo,SUM(Cantidad) AS Sold FROM(SELECT Articulo,Cantidad FROM MOVS_CIRCUNVALACION WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT Articulo,Cantidad FROM MOVS_LEONA WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT Articulo,Cantidad FROM MOVS_LECUMBERRI WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT Articulo,Cantidad FROM MOVS_CHINCONCUAC WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}'))MV GROUP BY LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1))V ON S.Articulo=V.Articulo LEFT JOIN(SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) AS Articulo,ROUND(MAX(Costo),0) AS Costo FROM SAP_CC GROUP BY LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1))D ON S.Articulo=D.Articulo WHERE S.Total_Stock>0 ORDER BY ISNULL(V.Sold,0) ASC,S.Total_Stock DESC",
 
 predictionData:()=>"SELECT Fecha,SUM(Total_Sale) AS Total_Sale,SUM(Tickets) AS Tickets FROM(SELECT CONVERT(VARCHAR(10),FECHA,23) AS Fecha,ROUND(SUM(Cantidad*Precio_Venta),0) AS Total_Sale,COUNT(DISTINCT NO_REFEREN) AS Tickets FROM MOVS_CIRCUNVALACION WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') GROUP BY CONVERT(VARCHAR(10),FECHA,23) UNION ALL SELECT CONVERT(VARCHAR(10),FECHA,23),ROUND(SUM(Cantidad*Precio_Venta),0),COUNT(DISTINCT NO_REFEREN) FROM MOVS_LEONA WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') GROUP BY CONVERT(VARCHAR(10),FECHA,23) UNION ALL SELECT CONVERT(VARCHAR(10),FECHA,23),ROUND(SUM(Cantidad*Precio_Venta),0),COUNT(DISTINCT NO_REFEREN) FROM MOVS_LECUMBERRI WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') GROUP BY CONVERT(VARCHAR(10),FECHA,23) UNION ALL SELECT CONVERT(VARCHAR(10),FECHA,23),ROUND(SUM(Cantidad*Precio_Venta),0),COUNT(DISTINCT NO_REFEREN) FROM MOVS_CHINCONCUAC WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') GROUP BY CONVERT(VARCHAR(10),FECHA,23))X GROUP BY Fecha ORDER BY Fecha",
@@ -492,6 +494,60 @@ function exportSalesReportPDF(rows,from,to,grand){
 window.exportSalesReportXLSX=exportSalesReportXLSX;
 window.buildSalesReportHTML=buildSalesReportHTML;
 
+/* ---- Missing Cost export: xlsx with photo thumbnails and a fill-in cost column ---- */
+async function exportMissingCostXLSX(rows,from,to,onProgress){
+  if(!rows||!rows.length)return null;
+  var XL=await loadExcelJS();
+  var wb=new XL.Workbook();
+  var ws=wb.addWorksheet("Missing Cost");
+  ws.mergeCells("A1:G1");
+  ws.getCell("A1").value="SAHIBA CENTRO — STYLES WITHOUT COST PRICE";
+  ws.getCell("A1").font={bold:true,size:14,color:{argb:"FFDC2626"}};
+  ws.mergeCells("A2:G2");
+  ws.getCell("A2").value="Sales period: "+from+" to "+to+" · Generated: "+todayLocal()+" · Fill the yellow Cost Price column, then register the costs in the POS system";
+  ws.getCell("A2").font={size:10,color:{argb:"FF64748B"}};
+  var HDR=4;
+  var cols=[["Photo",13],["Style",14],["Description",34],["Pieces Sold",12],["Revenue (unverified)",19],["Current Stock",13],["Cost Price — FILL IN",19]];
+  cols.forEach(function(c,i){
+    var cell=ws.getRow(HDR).getCell(i+1);
+    cell.value=c[0];
+    cell.font={bold:true,color:{argb:"FFFFFFFF"},size:10};
+    cell.fill={type:"pattern",pattern:"solid",fgColor:{argb:i===6?"FFB45309":"FFDC2626"}};
+    cell.alignment={horizontal:i>=3?"right":"left"};
+    ws.getColumn(i+1).width=c[1];
+  });
+  ws.getColumn(5).numFmt='"$"#,##0';
+  var BOXW=84,BOXH=78,ok=0;
+  for(var i=0;i<rows.length;i++){
+    var r=rows[i];var rr=HDR+1+i;
+    if(onProgress)onProgress(i+1,rows.length,r.Articulo);
+    var row=ws.getRow(rr);
+    row.height=BOXH*0.75+2;
+    row.getCell(2).value=r.Articulo;
+    row.getCell(2).font={bold:true};
+    row.getCell(3).value=String(r.Descripcion||"").trim();
+    row.getCell(4).value=nr(r.Sold);row.getCell(4).alignment={horizontal:"right"};
+    row.getCell(5).value=nr(r.Revenue);row.getCell(5).alignment={horizontal:"right"};
+    row.getCell(6).value=nr(r.Stock);row.getCell(6).alignment={horizontal:"right"};
+    row.getCell(7).fill={type:"pattern",pattern:"solid",fgColor:{argb:"FFFFF3C4"}};
+    var url=getStyleImg(r.Articulo);
+    if(url){try{
+      var d=await fetchDriveImageData(url);
+      var sc=Math.min(BOXW/d.w,BOXH/d.h);
+      var w=Math.max(1,Math.round(d.w*sc)),hh=Math.max(1,Math.round(d.h*sc));
+      var id=wb.addImage({base64:d.base64,extension:"jpeg"});
+      ws.addImage(id,{tl:{col:0.08,row:rr-1+0.05},ext:{width:w,height:hh},editAs:"oneCell"});
+      ok++;
+    }catch(e){}}
+  }
+  ws.views=[{state:"frozen",ySplit:HDR}];
+  var buf=await wb.xlsx.writeBuffer();
+  var blob=new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+  downloadBlob(blob,"missing_cost_"+from+"_"+to+".xlsx");
+  return{blob:blob,photos:ok};
+}
+window.exportMissingCostXLSX=exportMissingCostXLSX;
+
 function KPI({icon:I2,label,value,sub,kpiStyle,delay}){
   var s=KG[kpiStyle%KG.length];
   return h("div",{className:"kpi-card fu fu"+delay,style:{background:s.bg,border:"1px solid "+s.ac+"20"}},
@@ -525,7 +581,7 @@ function DT({columns,data,empty}){
       h("tbody",null,data.map(function(row,ri){return h("tr",{key:ri,className:"hr",style:{background:ri%2===1?"rgba(99,102,241,.02)":"transparent"}},columns.map(function(c,ci){return h("td",{key:ci,style:{padding:"10px 16px",borderBottom:"1px solid "+T.bL,color:c.color?c.color(row):T.tx,textAlign:c.align||"left",fontWeight:c.bold?600:400,fontFamily:c.mono?"'JetBrains Mono',monospace":"inherit",whiteSpace:"nowrap",fontSize:12.5}},c.render?c.render(row,ri):row[c.key])}))}))));
 }
 
-var imgCol={header:"",render:function(r){var art=r.Item_Code||r.Articulo||r.art||"";var clean=art.replace(/-.*$/,"");var src=getStyleImg(clean);return src?h("img",{src:src,onClick:function(){openStyleImage(clean)},style:{width:48,height:68,objectFit:"cover",borderRadius:6,cursor:"pointer",transition:"transform .2s",border:"2px solid transparent",boxShadow:"0 1px 3px rgba(0,0,0,.08)"},onMouseEnter:function(e){e.target.style.transform="scale(2)";e.target.style.border="2px solid #818cf8";e.target.style.zIndex="10";e.target.style.position="relative"},onMouseLeave:function(e){e.target.style.transform="";e.target.style.border="2px solid transparent";e.target.style.zIndex="";e.target.style.position=""}}):h("div",{style:{width:48,height:68,background:"#f1f5f9",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:"#94a3b8"}},"—")},align:"center"};
+var imgCol={header:"",render:function(r){var art=r.Item_Code||r.Articulo||r.art||"";var clean=art.replace(/-.*$/,"");var src=getStyleImg(clean);return src?h("img",{src:src,loading:"lazy",onClick:function(){openStyleImage(clean)},style:{width:48,height:68,objectFit:"cover",borderRadius:6,cursor:"pointer",transition:"transform .2s",border:"2px solid transparent",boxShadow:"0 1px 3px rgba(0,0,0,.08)"},onMouseEnter:function(e){e.target.style.transform="scale(2)";e.target.style.border="2px solid #818cf8";e.target.style.zIndex="10";e.target.style.position="relative"},onMouseLeave:function(e){e.target.style.transform="";e.target.style.border="2px solid transparent";e.target.style.zIndex="";e.target.style.position=""}}):h("div",{style:{width:48,height:68,background:"#f1f5f9",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:"#94a3b8"}},"—")},align:"center"};
 
 function Panel({children,style:s}){return h("div",{className:"panel fu",style:s||{}},children);}
 
@@ -744,7 +800,7 @@ var s27=st(null),corteReceipt=s27[0],setCorteReceipt=s27[1];
 var sRK=st(0),refreshKey=sRK[0],setRefreshKey=sRK[1];
 var fd=fmtD(date);
 var stores=["Circunvalacion","Jazmin","Leona Vicario","Lucumberri","Chinconcuac"];
-var tabs=[{id:"overview",l:"Overview"},{id:"tickets",l:"Tickets"},{id:"items",l:"Top Items"},{id:"report",l:"Sales Report"},{id:"yazmin",l:"Jazmin CRM"},{id:"inventory",l:"Inventory"},{id:"alerts",l:"Stock Alerts"},{id:"kardex",l:"Kardex"},{id:"deposits",l:"Deposits"},{id:"corte",l:"Cash Register"},{id:"styles",l:"Style Analysis"},{id:"excelphotos",l:"Excel Photos"},{id:"online",l:"Online Sale"},{id:"predict",l:"Prediction"}];
+var tabs=[{id:"overview",l:"Overview"},{id:"tickets",l:"Tickets"},{id:"items",l:"Top Items"},{id:"report",l:"Sales Report"},{id:"yazmin",l:"Jazmin CRM"},{id:"inventory",l:"Inventory"},{id:"alerts",l:"Stock Alerts"},{id:"kardex",l:"Kardex"},{id:"deposits",l:"Deposits"},{id:"corte",l:"Cash Register"},{id:"styles",l:"Style Analysis"},{id:"excelphotos",l:"Excel Photos"},{id:"online",l:"Online Sale"},{id:"predict",l:"Prediction"},{id:"missingcost",l:"Missing Cost"}];
 
 var prevDate=addDaysLocal(date,-7),fdPrev=fmtD(prevDate);
 var qStore=useQuery(SQL.storeSummary(),{fecha:fd},[fd,refreshKey]);
@@ -812,6 +868,12 @@ var s80=st(false),xpBusy=s80[0],setXpBusy=s80[1];
 var s81=st(null),xpProg=s81[0],setXpProg=s81[1];
 var s82=st(null),xpRes=s82[0],setXpRes=s82[1];
 var s83=st(null),xpErr=s83[0],setXpErr=s83[1];
+
+var s90=st(daysAgoLocal(90)),mcFrom=s90[0],setMcFrom=s90[1];
+var s91=st(todayLocal()),mcTo=s91[0],setMcTo=s91[1];
+var s92=st(false),mcBusy=s92[0],setMcBusy=s92[1];
+var s93=st(null),mcProg=s93[0],setMcProg=s93[1];
+var qMC=useQuery(SQL.missingCost(),{fecha1:fmtD(mcFrom),fecha2:fmtD(mcTo)},[fmtD(mcFrom),fmtD(mcTo),tab==="missingcost"],tab==="missingcost");
 var handleExcelPhotos=function(e){
   var file=e.target.files[0];e.target.value="";
   if(!file)return;
@@ -1509,6 +1571,36 @@ tab==="predict"&&h(Panel,null,
         hasActual&&{header:"Error %",align:"right",render:function(r){if(r.ErrorPct===null)return h("span",{style:{color:T.tt}},"—");var c=r.ErrorPct<=15?T.gn:r.ErrorPct<=25?T.am:T.rd;return h("span",{style:{fontSize:11,padding:"3px 8px",borderRadius:6,fontWeight:700,background:r.ErrorPct<=15?"#ecfdf5":r.ErrorPct<=25?"#fffbeb":"#fef2f2",color:c}},r.ErrorPct+"%")}}
       ].filter(Boolean),data:res}))
   })():null),
+
+// MISSING COST
+tab==="missingcost"&&h(Panel,null,
+  h(SH,{icon:Ic.Dol,title:"Missing Cost Prices",sub:"Styles sold or in stock with NO cost price registered — profit on these is not real until costs are added",gradient:"linear-gradient(135deg,#ef4444,#f87171)",
+    action:(qMC.data&&qMC.data.length>0)?h("button",{onClick:function(){if(mcBusy)return;setMcBusy(true);setMcProg(null);exportMissingCostXLSX(qMC.data,mcFrom,mcTo,function(d2,t2,s2){setMcProg({d:d2,t:t2,s:s2})}).then(function(){setMcBusy(false);setMcProg(null)}).catch(function(){setMcBusy(false);setMcProg(null)})},style:{padding:"9px 18px",borderRadius:10,border:"none",background:mcBusy?"#e2e8f0":"linear-gradient(135deg,#10b981,#34d399)",color:mcBusy?T.tt:"#fff",fontSize:12,fontWeight:700,cursor:mcBusy?"default":"pointer",fontFamily:"inherit",boxShadow:mcBusy?"none":"0 4px 14px rgba(16,185,129,.3)"}},mcBusy?(mcProg?("Building… "+mcProg.d+"/"+mcProg.t+" — "+mcProg.s):"Building…"):"⤓ Excel with photos"):null}),
+  h("div",{style:{display:"flex",gap:14,flexWrap:"wrap",alignItems:"flex-end",marginBottom:16}},
+    h("div",null,h("label",{style:{fontSize:10,color:T.pr,display:"block",marginBottom:4,fontWeight:700,textTransform:"uppercase"}},"Sales from"),h("input",{type:"date",value:mcFrom,onChange:function(e){setMcFrom(e.target.value)},style:{padding:"8px 14px",border:"1px solid "+T.border,borderRadius:10,fontSize:13,fontFamily:"inherit"}})),
+    h("div",null,h("label",{style:{fontSize:10,color:T.pr,display:"block",marginBottom:4,fontWeight:700,textTransform:"uppercase"}},"To"),h("input",{type:"date",value:mcTo,onChange:function(e){setMcTo(e.target.value)},style:{padding:"8px 14px",border:"1px solid "+T.border,borderRadius:10,fontSize:13,fontFamily:"inherit"}})),
+    h(Presets,{onPick:function(f,t){setMcFrom(f);setMcTo(t)}})),
+  qMC.loading?h(Loading):qMC.error?h(Err,{msg:qMC.error}):(function(){
+    var rows=qMC.data||[];
+    if(!rows.length)return h("div",{style:{textAlign:"center",padding:44,color:T.gn,fontSize:14,fontWeight:600}},"🎉 Every style in this period has a cost price registered");
+    var tp=rows.reduce(function(s,r){return s+nr(r.Sold)},0);
+    var tr2=rows.reduce(function(s,r){return s+nr(r.Revenue)},0);
+    var ts2=rows.reduce(function(s,r){return s+Math.max(0,nr(r.Stock))},0);
+    return h(React.Fragment,null,
+      h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:16,marginBottom:20}},
+        h(KPI,{icon:Ic.Pkg,label:"Styles Missing Cost",value:fN(rows.length),sub:"need registration",kpiStyle:3,delay:1}),
+        h(KPI,{icon:Ic.Cart,label:"Pieces Sold",value:fN(tp),sub:"in selected period",kpiStyle:0,delay:2}),
+        h(KPI,{icon:Ic.Dol,label:"Unverified Revenue",value:fmt(tr2),sub:"profit unknown on these",kpiStyle:1,delay:3}),
+        h(KPI,{icon:Ic.Pkg,label:"Units in Stock",value:fN(ts2),sub:"stock value unknown",kpiStyle:2,delay:4})),
+      h(DT,{columns:[imgCol,
+        {header:"Style",key:"Articulo",mono:true,bold:true,color:function(){return T.pr}},
+        {header:"Description",key:"Descripcion"},
+        {header:"Pieces Sold",align:"right",mono:true,render:function(r){return fN(nr(r.Sold))}},
+        {header:"Revenue (unverified)",align:"right",mono:true,render:function(r){return fmt(nr(r.Revenue))},color:function(){return T.pu}},
+        {header:"Stock",align:"right",mono:true,render:function(r){var s3=nr(r.Stock);return h("span",{style:{color:s3<0?T.rd:T.tx,fontWeight:s3<0?700:400}},fN(s3))}},
+        {header:"Cost",align:"center",render:function(){return h("span",{className:"chip",style:{background:"#fef2f2",color:T.rd}},"MISSING")}}
+      ],data:rows}));
+  })()),
 
 // FOOTER
 h("footer",{style:{marginTop:40,paddingTop:18,borderTop:"1px solid "+T.bL,display:"flex",justifyContent:"space-between",alignItems:"center"}},h("span",{style:{fontSize:11,color:T.tt}},"Sahiba Centro Dashboard \u00b7 LIVE \u00b7 "+date),h("div",{style:{display:"flex",alignItems:"center",gap:8}},h("div",{style:{width:8,height:8,borderRadius:"50%",background:qStore.error?"#ef4444":"#10b981"}}),h("span",{style:{fontSize:11,color:qStore.error?T.rd:T.gn,fontWeight:600}},qStore.error?"Disconnected":"Connected"))))
