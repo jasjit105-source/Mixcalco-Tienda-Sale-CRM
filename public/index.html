@@ -148,6 +148,8 @@ monthlySales:()=>"SELECT Mes,SUM(Pcs) AS Pcs,ROUND(SUM(Rev),0) AS Rev FROM(SELEC
 
 missingCost:()=>"SELECT TOP 500 U.Articulo,MAX(U.Descripcion) AS Descripcion,SUM(U.Sold) AS Sold,ROUND(SUM(U.Rev),0) AS Revenue,SUM(U.Stock) AS Stock FROM(SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) AS Articulo,Descripcion,Cantidad AS Sold,Cantidad*Precio_Venta AS Rev,0 AS Stock FROM MOVS_CIRCUNVALACION WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1),Descripcion,Cantidad,Cantidad*Precio_Venta,0 FROM MOVS_LEONA WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1),Descripcion,Cantidad,Cantidad*Precio_Venta,0 FROM MOVS_LECUMBERRI WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1),Descripcion,Cantidad,Cantidad*Precio_Venta,0 FROM MOVS_CHINCONCUAC WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1),CAST(NULL AS VARCHAR(200)),0,0,EXISTENCIA FROM PRODS_C UNION ALL SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1),CAST(NULL AS VARCHAR(200)),0,0,EXISTENCIA FROM PRODS_L UNION ALL SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1),CAST(NULL AS VARCHAR(200)),0,0,EXISTENCIA FROM PRODS_LECU UNION ALL SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1),CAST(NULL AS VARCHAR(200)),0,0,EXISTENCIA FROM PRODS_CHIN UNION ALL SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1),CAST(NULL AS VARCHAR(200)),0,0,EXISTENCIA FROM SAP_CC)U LEFT JOIN(SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) AS Articulo,MAX(ISNULL(Costo,0)) AS Costo FROM SAP_CC GROUP BY LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1))C ON U.Articulo=C.Articulo WHERE ISNULL(C.Costo,0)<=0 GROUP BY U.Articulo HAVING SUM(U.Sold)>0 OR SUM(U.Stock)>0 ORDER BY SUM(U.Rev) DESC,SUM(U.Stock) DESC",
 
+currentCosts:(arts)=>"SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) AS Articulo,MAX(ISNULL(Costo,0)) AS Costo,COUNT(*) AS Variants FROM SAP_CC WHERE LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) IN("+arts+") GROUP BY LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1)",
+
 stockAlerts:()=>"SELECT TOP 500 S.Articulo,S.Total_Stock,S.Cercu,S.Leona,S.Lucum,S.Chinco,S.Bodega,ISNULL(V.Sold,0) AS Sold,ISNULL(D.Costo,0) AS Costo FROM(SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) AS Articulo,SUM(EXISTENCIA) AS Total_Stock,SUM(CASE WHEN Store='Circunvalacion' THEN EXISTENCIA ELSE 0 END) AS Cercu,SUM(CASE WHEN Store='Leona' THEN EXISTENCIA ELSE 0 END) AS Leona,SUM(CASE WHEN Store='Lecumberri' THEN EXISTENCIA ELSE 0 END) AS Lucum,SUM(CASE WHEN Store='Chinconcuac' THEN EXISTENCIA ELSE 0 END) AS Chinco,SUM(CASE WHEN Store='Bodega' THEN EXISTENCIA ELSE 0 END) AS Bodega FROM(SELECT Articulo,EXISTENCIA,'Circunvalacion' AS Store FROM PRODS_C UNION ALL SELECT Articulo,EXISTENCIA,'Leona' FROM PRODS_L UNION ALL SELECT Articulo,EXISTENCIA,'Chinconcuac' FROM PRODS_CHIN UNION ALL SELECT Articulo,EXISTENCIA,'Lecumberri' FROM PRODS_LECU UNION ALL SELECT Articulo,EXISTENCIA,'Bodega' FROM SAP_CC)P GROUP BY LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1))S LEFT JOIN(SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) AS Articulo,SUM(Cantidad) AS Sold FROM(SELECT Articulo,Cantidad FROM MOVS_CIRCUNVALACION WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT Articulo,Cantidad FROM MOVS_LEONA WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT Articulo,Cantidad FROM MOVS_LECUMBERRI WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT Articulo,Cantidad FROM MOVS_CHINCONCUAC WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}'))MV GROUP BY LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1))V ON S.Articulo=V.Articulo LEFT JOIN(SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) AS Articulo,ROUND(MAX(Costo),0) AS Costo FROM SAP_CC GROUP BY LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1))D ON S.Articulo=D.Articulo WHERE S.Total_Stock>0 ORDER BY ISNULL(V.Sold,0) ASC,S.Total_Stock DESC",
 
 predictionData:()=>"SELECT Fecha,SUM(Total_Sale) AS Total_Sale,SUM(Tickets) AS Tickets FROM(SELECT CONVERT(VARCHAR(10),FECHA,23) AS Fecha,ROUND(SUM(Cantidad*Precio_Venta),0) AS Total_Sale,COUNT(DISTINCT NO_REFEREN) AS Tickets FROM MOVS_CIRCUNVALACION WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') GROUP BY CONVERT(VARCHAR(10),FECHA,23) UNION ALL SELECT CONVERT(VARCHAR(10),FECHA,23),ROUND(SUM(Cantidad*Precio_Venta),0),COUNT(DISTINCT NO_REFEREN) FROM MOVS_LEONA WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') GROUP BY CONVERT(VARCHAR(10),FECHA,23) UNION ALL SELECT CONVERT(VARCHAR(10),FECHA,23),ROUND(SUM(Cantidad*Precio_Venta),0),COUNT(DISTINCT NO_REFEREN) FROM MOVS_LECUMBERRI WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') GROUP BY CONVERT(VARCHAR(10),FECHA,23) UNION ALL SELECT CONVERT(VARCHAR(10),FECHA,23),ROUND(SUM(Cantidad*Precio_Venta),0),COUNT(DISTINCT NO_REFEREN) FROM MOVS_CHINCONCUAC WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') GROUP BY CONVERT(VARCHAR(10),FECHA,23))X GROUP BY Fecha ORDER BY Fecha",
@@ -548,6 +550,99 @@ async function exportMissingCostXLSX(rows,from,to,onProgress){
 }
 window.exportMissingCostXLSX=exportMissingCostXLSX;
 
+/* ---- Cost Update: parse an uploaded cost file, validate vs the DB, build the SQL script ----
+   The POS SQL API only accepts SELECT (verified: UPDATE returns 403), so the dashboard
+   cannot write costs itself. It validates and produces the exact script for the POS admin. */
+async function parseCostUpdateFile(arrayBuffer){
+  var XL=await loadExcelJS();
+  var JSZip=await loadJSZip();
+  var fixed=await normalizeXlsx(arrayBuffer,JSZip);
+  var wb=new XL.Workbook();
+  await withTimeout(wb.xlsx.load(fixed),45000,"This Excel file could not be read. Re-save it as .xlsx and try again.");
+  var ws=wb.worksheets[0];
+  if(!ws)throw new Error("No sheet found in this file.");
+  var styleCol=null,costCol=null,headerRow=0;
+  var styleRe=/^(style|styles|estilo|estilos|articulo|artículo|item|sku|clave|modelo)\b/i;
+  var costRe=/^(cost|costo|cost price|precio de costo|precio costo|new cost)\b/i;
+  for(var r=1;r<=Math.min(ws.rowCount,20)&&!(styleCol&&costCol);r++){
+    for(var c=1;c<=30;c++){
+      var v=ws.getRow(r).getCell(c).value;
+      if(typeof v==="string"){
+        var t=v.trim();
+        if(!styleCol&&styleRe.test(t)){styleCol=c;headerRow=r;}
+        if(!costCol&&costRe.test(t)){costCol=c;headerRow=r;}
+      }
+    }
+  }
+  if(!styleCol)throw new Error("Could not find a Style column. Keep a header like 'Style' or 'Articulo'.");
+  if(!costCol)throw new Error("Could not find a cost column. Keep a header like 'Cost Price' or 'Costo'.");
+  var toCost=function(v){
+    if(v==null)return null;
+    if(typeof v==="object"){v=v.result!=null?v.result:v.richText?v.richText.map(function(x){return x.text}).join(""):null;if(v==null)return null;}
+    var n=parseFloat(String(v).replace(/[$,\s]/g,""));
+    return isFinite(n)&&n>0?Math.round(n*100)/100:null;
+  };
+  var seen={},rows=[],skipped=0,badStyle=0;
+  for(var r2=headerRow+1;r2<=ws.rowCount;r2++){
+    var sv=ws.getRow(r2).getCell(styleCol).value;
+    if(sv==null||typeof sv==="object")continue;
+    var st2=String(sv).trim().toUpperCase();
+    if(!st2||st2.indexOf(" ")>=0)continue;
+    if(!/^[A-Z0-9][A-Z0-9\-_.]{1,19}$/.test(st2)){badStyle++;continue;}
+    var base=st2.replace(/-.*$/,"");
+    var cost=toCost(ws.getRow(r2).getCell(costCol).value);
+    if(cost==null){skipped++;continue;}
+    if(seen[base]!==undefined){rows[seen[base]].cost=cost;continue;}
+    seen[base]=rows.length;
+    rows.push({style:base,cost:cost});
+  }
+  return{rows:rows,skipped:skipped,badStyle:badStyle};
+}
+async function validateCostUpdate(rows){
+  var byStyle={};
+  for(var i=0;i<rows.length;i+=300){
+    var chunk=rows.slice(i,i+300);
+    var arts=chunk.map(function(r){return"'"+r.style+"'"}).join(",");
+    var res=await runQuery(SQL.currentCosts(arts),{});
+    (res||[]).forEach(function(r){byStyle[String(r.Articulo).toUpperCase()]={cost:Number(r.Costo)||0,variants:nr(r.Variants)}});
+  }
+  return rows.map(function(r){
+    var cur=byStyle[r.style];
+    var status=!cur?"NOT IN SYSTEM":cur.cost<=0?"WILL REGISTER":Math.abs(cur.cost-r.cost)<0.005?"NO CHANGE":"WILL CHANGE";
+    return{style:r.style,cost:r.cost,current:cur?cur.cost:null,variants:cur?cur.variants:0,status:status};
+  });
+}
+function buildCostUpdateSQL(items,fileName){
+  var apply=items.filter(function(x){return x.status==="WILL REGISTER"||x.status==="WILL CHANGE"});
+  var notFound=items.filter(function(x){return x.status==="NOT IN SYSTEM"});
+  var lines=[];
+  lines.push("-- SAHIBA CENTRO — Cost price update");
+  lines.push("-- Generated: "+todayLocal()+" from "+(fileName||"upload")+" · "+apply.length+" styles to update");
+  lines.push("-- Review, then run on the POS SQL Server database. Updates ALL size variants of each style.");
+  lines.push("SET XACT_ABORT ON;");
+  lines.push("BEGIN TRAN;");
+  apply.forEach(function(x){
+    lines.push("UPDATE SAP_CC SET Costo="+x.cost+" WHERE LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1)='"+x.style+"';"+(x.status==="WILL CHANGE"?" -- was "+x.current:" -- was missing"));
+  });
+  lines.push("-- Verify before committing:");
+  lines.push("SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) AS Style,MIN(Costo) AS MinCost,MAX(Costo) AS MaxCost,COUNT(*) AS Sizes FROM SAP_CC WHERE LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) IN("+apply.map(function(x){return"'"+x.style+"'"}).join(",")+") GROUP BY LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) ORDER BY 1;");
+  lines.push("COMMIT TRAN;");
+  if(notFound.length){
+    lines.push("");
+    lines.push("-- NOT FOUND in SAP_CC (create these articles in the POS first, then re-upload):");
+    lines.push("-- "+notFound.map(function(x){return x.style+" ("+x.cost+")"}).join(", "));
+  }
+  return lines.join("\n");
+}
+async function processCostUpdate(arrayBuffer,fileName){
+  var parsed=await parseCostUpdateFile(arrayBuffer);
+  if(!parsed.rows.length)throw new Error("No styles with a cost value were found. Fill the cost column and upload again.");
+  var items=await validateCostUpdate(parsed.rows);
+  var sql=buildCostUpdateSQL(items,fileName);
+  return{items:items,skipped:parsed.skipped,badStyle:parsed.badStyle,sql:sql,fileName:fileName};
+}
+window.processCostUpdate=processCostUpdate;
+
 function KPI({icon:I2,label,value,sub,kpiStyle,delay}){
   var s=KG[kpiStyle%KG.length];
   return h("div",{className:"kpi-card fu fu"+delay,style:{background:s.bg,border:"1px solid "+s.ac+"20"}},
@@ -800,7 +895,7 @@ var s27=st(null),corteReceipt=s27[0],setCorteReceipt=s27[1];
 var sRK=st(0),refreshKey=sRK[0],setRefreshKey=sRK[1];
 var fd=fmtD(date);
 var stores=["Circunvalacion","Jazmin","Leona Vicario","Lucumberri","Chinconcuac"];
-var tabs=[{id:"overview",l:"Overview"},{id:"tickets",l:"Tickets"},{id:"items",l:"Top Items"},{id:"report",l:"Sales Report"},{id:"yazmin",l:"Jazmin CRM"},{id:"inventory",l:"Inventory"},{id:"alerts",l:"Stock Alerts"},{id:"kardex",l:"Kardex"},{id:"deposits",l:"Deposits"},{id:"corte",l:"Cash Register"},{id:"styles",l:"Style Analysis"},{id:"excelphotos",l:"Excel Photos"},{id:"online",l:"Online Sale"},{id:"predict",l:"Prediction"},{id:"missingcost",l:"Missing Cost"}];
+var tabs=[{id:"overview",l:"Overview"},{id:"tickets",l:"Tickets"},{id:"items",l:"Top Items"},{id:"report",l:"Sales Report"},{id:"yazmin",l:"Jazmin CRM"},{id:"inventory",l:"Inventory"},{id:"alerts",l:"Stock Alerts"},{id:"kardex",l:"Kardex"},{id:"deposits",l:"Deposits"},{id:"corte",l:"Cash Register"},{id:"styles",l:"Style Analysis"},{id:"excelphotos",l:"Excel Photos"},{id:"online",l:"Online Sale"},{id:"predict",l:"Prediction"},{id:"missingcost",l:"Missing Cost"},{id:"costupdate",l:"Cost Update"}];
 
 var prevDate=addDaysLocal(date,-7),fdPrev=fmtD(prevDate);
 var qStore=useQuery(SQL.storeSummary(),{fecha:fd},[fd,refreshKey]);
@@ -874,6 +969,23 @@ var s91=st(todayLocal()),mcTo=s91[0],setMcTo=s91[1];
 var s92=st(false),mcBusy=s92[0],setMcBusy=s92[1];
 var s93=st(null),mcProg=s93[0],setMcProg=s93[1];
 var qMC=useQuery(SQL.missingCost(),{fecha1:fmtD(mcFrom),fecha2:fmtD(mcTo)},[fmtD(mcFrom),fmtD(mcTo),tab==="missingcost"],tab==="missingcost");
+
+var s95=st(false),cuBusy=s95[0],setCuBusy=s95[1];
+var s96=st(null),cuRes=s96[0],setCuRes=s96[1];
+var s97=st(null),cuErr=s97[0],setCuErr=s97[1];
+var handleCostUpdate=function(e){
+  var file=e.target.files[0];e.target.value="";
+  if(!file)return;
+  setCuBusy(true);setCuErr(null);setCuRes(null);
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    processCostUpdate(ev.target.result,file.name)
+      .then(function(res){setCuRes(res);setCuBusy(false);})
+      .catch(function(err){setCuErr(err.message);setCuBusy(false);});
+  };
+  reader.onerror=function(){setCuErr("Could not read the file");setCuBusy(false)};
+  reader.readAsArrayBuffer(file);
+};
 var handleExcelPhotos=function(e){
   var file=e.target.files[0];e.target.value="";
   if(!file)return;
@@ -1600,6 +1712,42 @@ tab==="missingcost"&&h(Panel,null,
         {header:"Stock",align:"right",mono:true,render:function(r){var s3=nr(r.Stock);return h("span",{style:{color:s3<0?T.rd:T.tx,fontWeight:s3<0?700:400}},fN(s3))}},
         {header:"Cost",align:"center",render:function(){return h("span",{className:"chip",style:{background:"#fef2f2",color:T.rd}},"MISSING")}}
       ],data:rows}));
+  })()),
+
+// COST UPDATE
+tab==="costupdate"&&h(Panel,null,
+  h(SH,{icon:Ic.Dol,title:"Cost Update",sub:"Upload the filled-in cost Excel — the dashboard validates it and builds the update script",gradient:"linear-gradient(135deg,#10b981,#34d399)"}),
+  h("div",{style:{marginBottom:16,padding:"12px 18px",borderRadius:12,background:"linear-gradient(135deg,#eef2ff,#e0e7ff)",fontSize:12.5,color:"#3730a3"}},
+    "The sales database only accepts ",h("strong",null,"read"),"-queries from this dashboard (writes are blocked by the POS server). Upload your file here to validate it against the live system, then download the ready-to-run SQL script and send it to the POS administrator. Once applied, the styles disappear from the Missing Cost tab automatically."),
+  h("label",{style:{display:"inline-flex",alignItems:"center",gap:8,padding:"14px 26px",background:cuBusy?"#e2e8f0":"linear-gradient(135deg,#10b981,#34d399)",color:cuBusy?T.tt:"#fff",borderRadius:14,cursor:cuBusy?"default":"pointer",fontSize:14,fontWeight:700,boxShadow:cuBusy?"none":"0 4px 14px rgba(16,185,129,.3)"}},
+    cuBusy?"Validating…":"📂 Upload cost file (.xlsx)",
+    h("input",{type:"file",accept:".xlsx",disabled:cuBusy,onChange:handleCostUpdate,style:{display:"none"}})),
+  h("div",{style:{marginTop:10,fontSize:11,color:T.tt}},"Works with the file from the Missing Cost tab (fill the yellow column) or any Excel with a Style column and a Cost column."),
+  cuErr&&h("div",{style:{marginTop:16}},h(Err,{msg:cuErr})),
+  cuRes&&(function(){
+    var items=cuRes.items;
+    var reg=items.filter(function(x){return x.status==="WILL REGISTER"}).length;
+    var chg=items.filter(function(x){return x.status==="WILL CHANGE"}).length;
+    var same=items.filter(function(x){return x.status==="NO CHANGE"}).length;
+    var nf=items.filter(function(x){return x.status==="NOT IN SYSTEM"}).length;
+    var SC2={"WILL REGISTER":{bg:"#ecfdf5",c:"#10b981"},"WILL CHANGE":{bg:"#fffbeb",c:"#f59e0b"},"NO CHANGE":{bg:"#f1f5f9",c:"#94a3b8"},"NOT IN SYSTEM":{bg:"#fef2f2",c:"#ef4444"}};
+    return h("div",{style:{marginTop:22}},
+      h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))",gap:14,marginBottom:16}},
+        h(KPI,{icon:Ic.Pkg,label:"Styles in File",value:fN(items.length),sub:(cuRes.skipped?cuRes.skipped+" rows without cost skipped":"all rows had costs"),kpiStyle:0,delay:1}),
+        h(KPI,{icon:Ic.Sp,label:"Will Register",value:fN(reg),sub:"cost currently missing",kpiStyle:2,delay:2}),
+        h(KPI,{icon:Ic.Trd,label:"Will Change",value:fN(chg),sub:"different from current",kpiStyle:1,delay:3}),
+        h(KPI,{icon:Ic.Ey,label:"Not In System",value:fN(nf),sub:"create in POS first",kpiStyle:3,delay:4})),
+      (reg+chg>0)&&h("div",{style:{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16}},
+        h("button",{onClick:function(){downloadBlob(new Blob([cuRes.sql],{type:"text/plain"}),"cost_update_"+todayLocal()+".sql")},style:{padding:"10px 22px",borderRadius:12,border:"none",background:"linear-gradient(135deg,#6366f1,#818cf8)",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(99,102,241,.3)"}},"⤓ Download SQL script ("+(reg+chg)+" updates)"),
+        h(CSVBtn,{rows:items,name:"cost_update_summary"})),
+      h(DT,{columns:[imgCol,
+        {header:"Style",key:"style",mono:true,bold:true,color:function(){return T.pr},render:function(r){return h("span",null,r.style)}},
+        {header:"Current Cost",align:"right",mono:true,render:function(r){return r.current==null?h("span",{style:{color:T.rd,fontWeight:700}},"not in system"):r.current<=0?h("span",{style:{color:T.tt}},"missing"):fmt(r.current)}},
+        {header:"New Cost",align:"right",mono:true,bold:true,render:function(r){return fmt(r.cost)},color:function(){return T.gn}},
+        {header:"Size Variants",key:"variants",align:"center",mono:true},
+        {header:"Status",align:"center",render:function(r){var p=SC2[r.status];return h("span",{className:"chip",style:{background:p.bg,color:p.c}},r.status)}}
+      ],data:items.map(function(x){return Object.assign({Articulo:x.style},x)})}),
+      same>0&&h("div",{style:{marginTop:10,fontSize:12,color:T.tt}},fN(same)+" styles already have this exact cost — they are excluded from the script."));
   })()),
 
 // FOOTER
