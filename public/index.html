@@ -608,7 +608,10 @@ async function validateCostUpdate(rows){
   }
   return rows.map(function(r){
     var cur=byStyle[r.style];
-    var status=!cur?"NOT IN SYSTEM":cur.cost<=0?"WILL REGISTER":Math.abs(cur.cost-r.cost)<0.005?"NO CHANGE":"WILL CHANGE";
+    var status;
+    if(!cur)status="NOT IN SYSTEM";
+    else if(r.cost==null)status=cur.cost<=0?"MISSING":"REGISTERED";
+    else status=cur.cost<=0?"WILL REGISTER":Math.abs(cur.cost-r.cost)<0.005?"MATCHES":"WILL CHANGE";
     return{style:r.style,cost:r.cost,current:cur?cur.cost:null,variants:cur?cur.variants:0,status:status};
   });
 }
@@ -642,6 +645,39 @@ async function processCostUpdate(arrayBuffer,fileName){
   return{items:items,skipped:parsed.skipped,badStyle:parsed.badStyle,sql:sql,fileName:fileName};
 }
 window.processCostUpdate=processCostUpdate;
+/* Manual entry: one style per line — "517VE 180" sets a cost to check/apply,
+   a style alone just looks up the current cost. */
+function parseManualCosts(text){
+  var rows=[],skipped=0,badStyle=0,seen={};
+  String(text||"").split(/\n+/).forEach(function(line){
+    var t=line.trim();if(!t)return;
+    var parts=t.split(/[\s,;=]+/).filter(Boolean);
+    var st=String(parts[0]||"").toUpperCase();
+    if(!/^[A-Z0-9][A-Z0-9\-_.]{1,19}$/.test(st)){badStyle++;return;}
+    var base=st.replace(/-.*$/,"");
+    var cost=null;
+    if(parts.length>1){
+      var n=parseFloat(String(parts[1]).replace(/[$,]/g,""));
+      if(isFinite(n)&&n>0)cost=Math.round(n*100)/100;else skipped++;
+    }
+    if(seen[base]!==undefined){rows[seen[base]].cost=cost;return;}
+    seen[base]=rows.length;rows.push({style:base,cost:cost});
+  });
+  return{rows:rows,skipped:skipped,badStyle:badStyle};
+}
+async function processManualCosts(text){
+  var parsed=parseManualCosts(text);
+  if(!parsed.rows.length)throw new Error("Type at least one style, e.g.  517VE 180");
+  var items=await validateCostUpdate(parsed.rows);
+  return{items:items,skipped:parsed.skipped,badStyle:parsed.badStyle,sql:buildCostUpdateSQL(items,"manual entry"),fileName:"manual entry"};
+}
+async function recheckCostUpdate(prev){
+  var rows=prev.items.map(function(x){return{style:x.style,cost:x.cost}});
+  var items=await validateCostUpdate(rows);
+  return{items:items,skipped:prev.skipped,badStyle:prev.badStyle,sql:buildCostUpdateSQL(items,prev.fileName),fileName:prev.fileName};
+}
+window.processManualCosts=processManualCosts;
+window.recheckCostUpdate=recheckCostUpdate;
 
 function KPI({icon:I2,label,value,sub,kpiStyle,delay}){
   var s=KG[kpiStyle%KG.length];
@@ -973,6 +1009,7 @@ var qMC=useQuery(SQL.missingCost(),{fecha1:fmtD(mcFrom),fecha2:fmtD(mcTo)},[fmtD
 var s95=st(false),cuBusy=s95[0],setCuBusy=s95[1];
 var s96=st(null),cuRes=s96[0],setCuRes=s96[1];
 var s97=st(null),cuErr=s97[0],setCuErr=s97[1];
+var s98=st(""),cuText=s98[0],setCuText=s98[1];
 var handleCostUpdate=function(e){
   var file=e.target.files[0];e.target.value="";
   if(!file)return;
@@ -1723,31 +1760,37 @@ tab==="costupdate"&&h(Panel,null,
     cuBusy?"Validating…":"📂 Upload cost file (.xlsx)",
     h("input",{type:"file",accept:".xlsx",disabled:cuBusy,onChange:handleCostUpdate,style:{display:"none"}})),
   h("div",{style:{marginTop:10,fontSize:11,color:T.tt}},"Works with the file from the Missing Cost tab (fill the yellow column) or any Excel with a Style column and a Cost column."),
+  h("div",{style:{marginTop:22,padding:"16px 18px",borderRadius:14,border:"1px solid "+T.border,background:"rgba(255,255,255,.6)",maxWidth:560}},
+    h("div",{style:{fontSize:12,fontWeight:800,color:T.pr,marginBottom:6,textTransform:"uppercase",letterSpacing:.8}},"Or type styles manually — one per line"),
+    h("div",{style:{fontSize:11,color:T.tt,marginBottom:8}},"Format: STYLE COST (e.g. 517VE 180). A style alone just checks the current cost. Works for one style or a whole list."),
+    h("textarea",{value:cuText,onChange:function(e){setCuText(e.target.value)},placeholder:"517VE 180\n3000TU 40\n21TU",rows:5,style:{width:"100%",padding:12,border:"1.5px solid "+T.border,borderRadius:12,fontSize:13,fontFamily:"'JetBrains Mono',monospace",resize:"vertical",outline:"none",boxSizing:"border-box",marginBottom:10}}),
+    h("button",{onClick:function(){if(cuBusy||!cuText.trim())return;setCuBusy(true);setCuErr(null);setCuRes(null);processManualCosts(cuText).then(function(r2){setCuRes(r2);setCuBusy(false)}).catch(function(e2){setCuErr(e2.message);setCuBusy(false)})},style:{padding:"10px 24px",borderRadius:12,border:"none",background:cuBusy?"#e2e8f0":"linear-gradient(135deg,#6366f1,#818cf8)",color:cuBusy?T.tt:"#fff",fontSize:13,fontWeight:700,cursor:cuBusy?"default":"pointer",fontFamily:"inherit",boxShadow:cuBusy?"none":"0 4px 14px rgba(99,102,241,.3)"}},cuBusy?"Checking…":"🔍 Check against system")),
   cuErr&&h("div",{style:{marginTop:16}},h(Err,{msg:cuErr})),
   cuRes&&(function(){
     var items=cuRes.items;
     var reg=items.filter(function(x){return x.status==="WILL REGISTER"}).length;
     var chg=items.filter(function(x){return x.status==="WILL CHANGE"}).length;
-    var same=items.filter(function(x){return x.status==="NO CHANGE"}).length;
+    var same=items.filter(function(x){return x.status==="MATCHES"}).length;
     var nf=items.filter(function(x){return x.status==="NOT IN SYSTEM"}).length;
-    var SC2={"WILL REGISTER":{bg:"#ecfdf5",c:"#10b981"},"WILL CHANGE":{bg:"#fffbeb",c:"#f59e0b"},"NO CHANGE":{bg:"#f1f5f9",c:"#94a3b8"},"NOT IN SYSTEM":{bg:"#fef2f2",c:"#ef4444"}};
+    var SC2={"WILL REGISTER":{bg:"#eef2ff",c:"#6366f1"},"WILL CHANGE":{bg:"#fffbeb",c:"#f59e0b"},"MATCHES":{bg:"#ecfdf5",c:"#10b981"},"REGISTERED":{bg:"#ecfdf5",c:"#10b981"},"MISSING":{bg:"#fef2f2",c:"#ef4444"},"NOT IN SYSTEM":{bg:"#fef2f2",c:"#ef4444"}};
     return h("div",{style:{marginTop:22}},
       h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))",gap:14,marginBottom:16}},
         h(KPI,{icon:Ic.Pkg,label:"Styles in File",value:fN(items.length),sub:(cuRes.skipped?cuRes.skipped+" rows without cost skipped":"all rows had costs"),kpiStyle:0,delay:1}),
         h(KPI,{icon:Ic.Sp,label:"Will Register",value:fN(reg),sub:"cost currently missing",kpiStyle:2,delay:2}),
         h(KPI,{icon:Ic.Trd,label:"Will Change",value:fN(chg),sub:"different from current",kpiStyle:1,delay:3}),
         h(KPI,{icon:Ic.Ey,label:"Not In System",value:fN(nf),sub:"create in POS first",kpiStyle:3,delay:4})),
-      (reg+chg>0)&&h("div",{style:{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16}},
-        h("button",{onClick:function(){downloadBlob(new Blob([cuRes.sql],{type:"text/plain"}),"cost_update_"+todayLocal()+".sql")},style:{padding:"10px 22px",borderRadius:12,border:"none",background:"linear-gradient(135deg,#6366f1,#818cf8)",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(99,102,241,.3)"}},"⤓ Download SQL script ("+(reg+chg)+" updates)"),
+      h("div",{style:{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16}},
+        (reg+chg>0)&&h("button",{onClick:function(){downloadBlob(new Blob([cuRes.sql],{type:"text/plain"}),"cost_update_"+todayLocal()+".sql")},style:{padding:"10px 22px",borderRadius:12,border:"none",background:"linear-gradient(135deg,#6366f1,#818cf8)",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(99,102,241,.3)"}},"⤓ Download SQL script ("+(reg+chg)+" updates)"),
+        h("button",{onClick:function(){if(cuBusy)return;setCuBusy(true);setCuErr(null);recheckCostUpdate(cuRes).then(function(r2){setCuRes(r2);setCuBusy(false)}).catch(function(e2){setCuErr(e2.message);setCuBusy(false)})},style:{padding:"10px 22px",borderRadius:12,border:"1px solid "+T.border,background:cuBusy?"#e2e8f0":"rgba(16,185,129,.08)",color:cuBusy?T.tt:T.gn,fontSize:13,fontWeight:700,cursor:cuBusy?"default":"pointer",fontFamily:"inherit"}},cuBusy?"Checking…":"↻ Re-check system"),
         h(CSVBtn,{rows:items,name:"cost_update_summary"})),
       h(DT,{columns:[imgCol,
         {header:"Style",key:"style",mono:true,bold:true,color:function(){return T.pr},render:function(r){return h("span",null,r.style)}},
         {header:"Current Cost",align:"right",mono:true,render:function(r){return r.current==null?h("span",{style:{color:T.rd,fontWeight:700}},"not in system"):r.current<=0?h("span",{style:{color:T.tt}},"missing"):fmt(r.current)}},
-        {header:"New Cost",align:"right",mono:true,bold:true,render:function(r){return fmt(r.cost)},color:function(){return T.gn}},
+        {header:"New Cost",align:"right",mono:true,bold:true,render:function(r){return r.cost==null?h("span",{style:{color:T.tt,fontWeight:400}},"check only"):fmt(r.cost)},color:function(){return T.gn}},
         {header:"Size Variants",key:"variants",align:"center",mono:true},
-        {header:"Status",align:"center",render:function(r){var p=SC2[r.status];return h("span",{className:"chip",style:{background:p.bg,color:p.c}},r.status)}}
+        {header:"Status",align:"center",render:function(r){var p=SC2[r.status]||{bg:"#f1f5f9",c:"#94a3b8"};var lbl=r.status==="MATCHES"?"MATCHES \u2713":r.status==="REGISTERED"?"REGISTERED \u2713":r.status;return h("span",{className:"chip",style:{background:p.bg,color:p.c}},lbl)}}
       ],data:items.map(function(x){return Object.assign({Articulo:x.style},x)})}),
-      same>0&&h("div",{style:{marginTop:10,fontSize:12,color:T.tt}},fN(same)+" styles already have this exact cost — they are excluded from the script."));
+      same>0&&h("div",{style:{marginTop:10,fontSize:12,color:T.tt}},fN(same)+" styles match the system exactly (\u2713 updated) — they are excluded from the script."));
   })()),
 
 // FOOTER
