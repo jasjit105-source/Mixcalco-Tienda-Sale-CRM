@@ -28,6 +28,7 @@ const CASES = [
   ["monthlySales", SQL.monthlySales(), { fecha1: "20260101", fecha2: D2 }],
   ["missingCost", SQL.missingCost(), { fecha1: "20260601", fecha2: D2 }],
   ["currentCosts", SQL.currentCosts("'517VE','3000TU'"), {}],
+  ["firstSeen", SQL.firstSeen(), {}],
   ["kardex", SQL.kardex("006KA"), { fecha1: D1, fecha2: D2 }],
   ["corteCercu", SQL.corteCercu(), { fecha: D }],
   ["corteLeona", SQL.corteLeona(), { fecha: D }],

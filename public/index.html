@@ -150,6 +150,8 @@ missingCost:()=>"SELECT TOP 500 U.Articulo,MAX(U.Descripcion) AS Descripcion,SUM
 
 currentCosts:(arts)=>"SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) AS Articulo,MAX(ISNULL(Costo,0)) AS Costo,COUNT(*) AS Variants FROM SAP_CC WHERE LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) IN("+arts+") GROUP BY LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1)",
 
+firstSeen:()=>"SELECT CustPhone,CONVERT(VARCHAR(10),MIN(FECHA),23) AS FirstDate,COUNT(DISTINCT NO_REFEREN) AS LifetimeTickets FROM MOVS_CIRCUNVALACION WHERE CustPhone IS NOT NULL AND LTRIM(RTRIM(CustPhone))<>'' AND Movimiento='TK' GROUP BY CustPhone",
+
 stockAlerts:()=>"SELECT TOP 500 S.Articulo,S.Total_Stock,S.Cercu,S.Leona,S.Lucum,S.Chinco,S.Bodega,ISNULL(V.Sold,0) AS Sold,ISNULL(D.Costo,0) AS Costo FROM(SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) AS Articulo,SUM(EXISTENCIA) AS Total_Stock,SUM(CASE WHEN Store='Circunvalacion' THEN EXISTENCIA ELSE 0 END) AS Cercu,SUM(CASE WHEN Store='Leona' THEN EXISTENCIA ELSE 0 END) AS Leona,SUM(CASE WHEN Store='Lecumberri' THEN EXISTENCIA ELSE 0 END) AS Lucum,SUM(CASE WHEN Store='Chinconcuac' THEN EXISTENCIA ELSE 0 END) AS Chinco,SUM(CASE WHEN Store='Bodega' THEN EXISTENCIA ELSE 0 END) AS Bodega FROM(SELECT Articulo,EXISTENCIA,'Circunvalacion' AS Store FROM PRODS_C UNION ALL SELECT Articulo,EXISTENCIA,'Leona' FROM PRODS_L UNION ALL SELECT Articulo,EXISTENCIA,'Chinconcuac' FROM PRODS_CHIN UNION ALL SELECT Articulo,EXISTENCIA,'Lecumberri' FROM PRODS_LECU UNION ALL SELECT Articulo,EXISTENCIA,'Bodega' FROM SAP_CC)P GROUP BY LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1))S LEFT JOIN(SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) AS Articulo,SUM(Cantidad) AS Sold FROM(SELECT Articulo,Cantidad FROM MOVS_CIRCUNVALACION WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT Articulo,Cantidad FROM MOVS_LEONA WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT Articulo,Cantidad FROM MOVS_LECUMBERRI WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT Articulo,Cantidad FROM MOVS_CHINCONCUAC WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}'))MV GROUP BY LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1))V ON S.Articulo=V.Articulo LEFT JOIN(SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) AS Articulo,ROUND(MAX(Costo),0) AS Costo FROM SAP_CC GROUP BY LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1))D ON S.Articulo=D.Articulo WHERE S.Total_Stock>0 ORDER BY ISNULL(V.Sold,0) ASC,S.Total_Stock DESC",
 
 predictionData:()=>"SELECT Fecha,SUM(Total_Sale) AS Total_Sale,SUM(Tickets) AS Tickets FROM(SELECT CONVERT(VARCHAR(10),FECHA,23) AS Fecha,ROUND(SUM(Cantidad*Precio_Venta),0) AS Total_Sale,COUNT(DISTINCT NO_REFEREN) AS Tickets FROM MOVS_CIRCUNVALACION WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') GROUP BY CONVERT(VARCHAR(10),FECHA,23) UNION ALL SELECT CONVERT(VARCHAR(10),FECHA,23),ROUND(SUM(Cantidad*Precio_Venta),0),COUNT(DISTINCT NO_REFEREN) FROM MOVS_LEONA WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') GROUP BY CONVERT(VARCHAR(10),FECHA,23) UNION ALL SELECT CONVERT(VARCHAR(10),FECHA,23),ROUND(SUM(Cantidad*Precio_Venta),0),COUNT(DISTINCT NO_REFEREN) FROM MOVS_LECUMBERRI WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') GROUP BY CONVERT(VARCHAR(10),FECHA,23) UNION ALL SELECT CONVERT(VARCHAR(10),FECHA,23),ROUND(SUM(Cantidad*Precio_Venta),0),COUNT(DISTINCT NO_REFEREN) FROM MOVS_CHINCONCUAC WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') GROUP BY CONVERT(VARCHAR(10),FECHA,23))X GROUP BY Fecha ORDER BY Fecha",
@@ -619,6 +621,59 @@ async function exportJazminXLSX(rows,from,to){
   return blob;
 }
 window.exportJazminXLSX=exportJazminXLSX;
+
+/* ---- Customer lifecycle: phone normalization + respond.io CSV parsing ---- */
+function normPhone(p){
+  var d=String(p||"").replace(/\D/g,"");
+  if(d.length>10){
+    if(d.slice(0,3)==="521")d=d.slice(3);
+    else if(d.slice(0,2)==="52")d=d.slice(2);
+  }
+  return d.length>=10?d.slice(-10):d;
+}
+function parseCSVText(text){
+  var rows=[],row=[],cur="",inQ=false;
+  for(var i=0;i<text.length;i++){
+    var ch=text[i];
+    if(inQ){
+      if(ch==='"'){if(text[i+1]==='"'){cur+='"';i++;}else inQ=false;}
+      else cur+=ch;
+    }else{
+      if(ch==='"')inQ=true;
+      else if(ch===","){row.push(cur);cur="";}
+      else if(ch==="\n"||ch==="\r"){
+        if(ch==="\r"&&text[i+1]==="\n")i++;
+        row.push(cur);cur="";
+        if(row.length>1||String(row[0]||"").trim()!=="")rows.push(row);
+        row=[];
+      }else cur+=ch;
+    }
+  }
+  if(cur!==""||row.length){row.push(cur);rows.push(row);}
+  return rows;
+}
+function parseRespondCSV(text){
+  var rows=parseCSVText(String(text||""));
+  if(rows.length<2)throw new Error("The CSV appears to be empty.");
+  var hdr=rows[0].map(function(x){return String(x||"").trim()});
+  var lc=hdr.map(function(x){return x.toLowerCase()});
+  var findCol=function(res){for(var i=0;i<lc.length;i++){for(var j=0;j<res.length;j++){if(res[j].test(lc[i]))return i}}return -1};
+  var pc=findCol([/^phone number$/,/^phone/,/tel[eé]fono/,/whatsapp/,/^mobile/,/celular/]);
+  if(pc<0)throw new Error("No phone column found (looked for Phone / Telefono / WhatsApp / Mobile).");
+  var lcc=findCol([/life\s*cycle/,/lifecycle/,/etapa/]);
+  var dc=findCol([/customer\s*date/,/fecha.*cliente/,/converted/,/became.*customer/]);
+  var cc=findCol([/created/,/date added/,/fecha.*creaci/,/first.*message/]);
+  var map={},n=0;
+  for(var r=1;r<rows.length;r++){
+    var ph=normPhone(rows[r][pc]);
+    if(ph.length<10)continue;
+    map[ph]={lifecycle:lcc>=0?String(rows[r][lcc]||"").trim():"",custDate:dc>=0?String(rows[r][dc]||"").trim():"",created:cc>=0?String(rows[r][cc]||"").trim():""};
+    n++;
+  }
+  return{map:map,count:n,cols:{phone:hdr[pc],lifecycle:lcc>=0?hdr[lcc]:null,custDate:dc>=0?hdr[dc]:null,created:cc>=0?hdr[cc]:null}};
+}
+window.parseRespondCSV=parseRespondCSV;
+window.normPhone=normPhone;
 
 /* ---- Cost Update: parse an uploaded cost file, validate vs the DB, build the SQL script ----
    The POS SQL API only accepts SELECT (verified: UPDATE returns 403), so the dashboard
@@ -1197,6 +1252,29 @@ var doLookup=cb(function(ticket,store,fecha){
 
 var yfd1=fmtD(yFrom),yfd2=fmtD(yTo);
 var yEn=tab==="yazmin";
+var qFS=useQuery(SQL.firstSeen(),{},["fs",yEn],yEn);
+var fsMap=useMemo(function(){
+  var m={};
+  (qFS.data||[]).forEach(function(r){
+    var p=normPhone(r.CustPhone);
+    if(!p||p.length<10)return;
+    if(!m[p])m[p]={first:r.FirstDate,tk:0};
+    if(r.FirstDate<m[p].first)m[p].first=r.FirstDate;
+    m[p].tk+=nr(r.LifetimeTickets);
+  });
+  return m;
+},[qFS.data]);
+var s99=st(null),ioCsv=s99[0],setIoCsv=s99[1];
+var handleRespondCSV=function(e){
+  var file=e.target.files[0];e.target.value="";if(!file)return;
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    try{setIoCsv(parseRespondCSV(ev.target.result));}
+    catch(err){setIoCsv({error:err.message});}
+  };
+  reader.onerror=function(){setIoCsv({error:"Could not read the file"})};
+  reader.readAsText(file);
+};
 var qYT=useQuery(SQL.yazminTickets(),{fecha_inicio:yfd1,fecha_fin:yfd2},[yfd1,yfd2,"yt",yEn],yEn);
 var qYC=useQuery(SQL.yazminTopCustomers(),{fecha_inicio:yfd1,fecha_fin:yfd2},[yfd1,yfd2,"yc",yEn],yEn);
 var qYD=useQuery(SQL.yazminDaily(),{fecha_inicio:yfd1,fecha_fin:yfd2},[yfd1,yfd2,"yd",yEn],yEn);
@@ -1297,11 +1375,11 @@ tab==="yazmin"&&h(React.Fragment,null,
         h("div",{style:{padding:"8px 16px",borderRadius:10,background:"linear-gradient(135deg,#f5f3ff,#ede9fe)"}},h("div",{style:{fontSize:9,color:T.pu,fontWeight:700,textTransform:"uppercase"}},"Sales"),h("div",{style:{fontSize:18,fontWeight:800,color:T.tx}},fmt(qYT.data.reduce(function(s,r){return s+nr(r.Total_Amount)},0)))),
         h("div",{style:{padding:"8px 16px",borderRadius:10,background:"linear-gradient(135deg,#ecfdf5,#d1fae5)"}},h("div",{style:{fontSize:9,color:T.gn,fontWeight:700,textTransform:"uppercase"}},"2% Commission"),h("div",{style:{fontSize:18,fontWeight:800,color:T.tx}},fmt(qYT.data.reduce(function(s,r){return s+nr(r.Commission)},0)))),
         h("button",{onClick:function(){exportJazminXLSX(qYT.data,yFrom,yTo)},style:{padding:"8px 16px",borderRadius:10,background:"linear-gradient(135deg,#10b981,#34d399)",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:6}},"⤓ Excel"),h("button",{onClick:function(){generateJazminPDF(qYT.data,yFrom,yTo)},style:{padding:"8px 16px",borderRadius:10,background:"linear-gradient(135deg,#6366f1,#818cf8)",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:6}},"\ud83d\udcc4 PDF"))),
-    h("div",{style:{display:"flex",gap:4}},["tickets","customers","daily","big"].map(function(t){return h(TabBtn,{key:t,active:yTab===t,label:{tickets:"Tickets",customers:"Top Customers",daily:"Daily",big:"Big Tickets"}[t],onClick:function(){setYTab(t)}})}))),
+    h("div",{style:{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}},["tickets","customers","daily","big"].map(function(t){return h(TabBtn,{key:t,active:yTab===t,label:{tickets:"Tickets",customers:"Top Customers",daily:"Daily",big:"Big Tickets"}[t],onClick:function(){setYTab(t)}})}),h("label",{style:{marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:6,padding:"7px 14px",background:"rgba(16,185,129,.1)",color:"#0f766e",borderRadius:10,cursor:"pointer",fontSize:11.5,fontWeight:700,border:"1px solid rgba(16,185,129,.25)"}},"📥 respond.io CSV",h("input",{type:"file",accept:".csv",onChange:handleRespondCSV,style:{display:"none"}})),ioCsv&&(ioCsv.error?h("span",{style:{fontSize:11,color:T.rd,fontWeight:600}},ioCsv.error):h("span",{className:"chip",style:{background:"#ecfdf5",color:T.gn}},fN(ioCsv.count)+" contacts loaded")))),
 
-  yTab==="tickets"&&h(Panel,null,h(SH,{icon:Ic.Cart,title:"Jazmin Tickets",sub:"With 2% commission",action:h(CSVBtn,{rows:qYT.data,name:"jazmin_tickets"}),gradient:"linear-gradient(135deg,#ec4899,#f472b6)"}),qYT.loading?h(Loading):qYT.error?h(Err,{msg:qYT.error}):h(DT,{columns:[{header:"Date",key:"Fecha",mono:true},{header:"Ticket",key:"Ticket",mono:true,color:function(){return T.pr}},{header:"Total",align:"right",mono:true,render:function(r){return fmt(nr(r.Total_Amount))},color:function(){return T.pu}},{header:"2% Commission",align:"right",mono:true,render:function(r){return fmt(nr(r.Commission))},color:function(){return T.gn}},{header:"Arts",key:"Item_Count",align:"center",mono:true},{header:"Customer",key:"Customer"},{header:"Phone",key:"Phone",mono:true},{header:"Tracking",key:"Guia",mono:true},{header:"Account",key:"Pago2",mono:true,color:function(){return T.am}}],data:qYT.data})),
+  yTab==="tickets"&&h(Panel,null,h(SH,{icon:Ic.Cart,title:"Jazmin Tickets",sub:"With 2% commission",action:h(CSVBtn,{rows:qYT.data,name:"jazmin_tickets"}),gradient:"linear-gradient(135deg,#ec4899,#f472b6)"}),qYT.loading?h(Loading):qYT.error?h(Err,{msg:qYT.error}):h(DT,{columns:[{header:"Date",key:"Fecha",mono:true},{header:"Ticket",key:"Ticket",mono:true,color:function(){return T.pr}},{header:"Total",align:"right",mono:true,render:function(r){return fmt(nr(r.Total_Amount))},color:function(){return T.pu}},{header:"2% Commission",align:"right",mono:true,render:function(r){return fmt(nr(r.Commission))},color:function(){return T.gn}},{header:"Arts",key:"Item_Count",align:"center",mono:true},{header:"Customer",key:"Customer"},{header:"Phone",key:"Phone",mono:true},{header:"Customer Since",render:function(r){var f=fsMap[normPhone(r.Phone)];return f?h("div",null,h("div",{style:{fontFamily:"'JetBrains Mono',monospace",fontSize:12,fontWeight:600}},f.first),h("div",{style:{fontSize:10,color:T.tt}},fN(f.tk)+" tickets lifetime")):h("span",{style:{color:T.tt}},"—")}},{header:"Lifecycle",render:function(r){if(!ioCsv||!ioCsv.map)return h("span",{style:{color:T.tt,fontSize:10}},"—");var c=ioCsv.map[normPhone(r.Phone)];if(!c)return h("span",{style:{color:T.tt,fontSize:11}},"not in CSV");return h("div",null,c.lifecycle?h("span",{className:"chip",style:{background:"#eef2ff",color:T.pr}},c.lifecycle):h("span",{style:{color:T.tt,fontSize:11}},"(no stage)"),(c.custDate||c.created)?h("div",{style:{fontSize:10,color:T.tt,marginTop:2}},String(c.custDate||c.created).slice(0,19)):null)}},{header:"Tracking",key:"Guia",mono:true},{header:"Account",key:"Pago2",mono:true,color:function(){return T.am}}],data:qYT.data})),
 
-  yTab==="customers"&&h(Panel,null,h(SH,{icon:Ic.Usr,title:"Top 50 Customers by Amount",gradient:"linear-gradient(135deg,#8b5cf6,#a78bfa)"}),qYC.loading?h(Loading):qYC.error?h(Err,{msg:qYC.error}):h(DT,{columns:[{header:"#",render:function(r,i){return h("span",{style:{display:"inline-flex",alignItems:"center",justifyContent:"center",width:24,height:24,borderRadius:8,background:i<3?"linear-gradient(135deg,#f59e0b,#fbbf24)":"#f0f4ff",color:i<3?"#fff":T.ts,fontSize:11,fontWeight:700}},i+1)},align:"center"},{header:"Customer",key:"Customer",bold:true},{header:"Phone",key:"Phone",mono:true},{header:"Total",align:"right",mono:true,render:function(r){return fmt(nr(r.Total_Amount))},color:function(){return T.pu}},{header:"Visits",key:"Visits",align:"center",mono:true}],data:qYC.data})),
+  yTab==="customers"&&h(Panel,null,h(SH,{icon:Ic.Usr,title:"Top 50 Customers by Amount",gradient:"linear-gradient(135deg,#8b5cf6,#a78bfa)"}),qYC.loading?h(Loading):qYC.error?h(Err,{msg:qYC.error}):h(DT,{columns:[{header:"#",render:function(r,i){return h("span",{style:{display:"inline-flex",alignItems:"center",justifyContent:"center",width:24,height:24,borderRadius:8,background:i<3?"linear-gradient(135deg,#f59e0b,#fbbf24)":"#f0f4ff",color:i<3?"#fff":T.ts,fontSize:11,fontWeight:700}},i+1)},align:"center"},{header:"Customer",key:"Customer",bold:true},{header:"Phone",key:"Phone",mono:true},{header:"Customer Since",render:function(r){var f=fsMap[normPhone(r.Phone)];return f?h("span",{style:{fontFamily:"'JetBrains Mono',monospace",fontSize:12}},f.first):h("span",{style:{color:T.tt}},"—")}},{header:"Lifecycle",render:function(r){if(!ioCsv||!ioCsv.map)return h("span",{style:{color:T.tt,fontSize:10}},"—");var c=ioCsv.map[normPhone(r.Phone)];if(!c)return h("span",{style:{color:T.tt,fontSize:11}},"not in CSV");return h("div",null,c.lifecycle?h("span",{className:"chip",style:{background:"#eef2ff",color:T.pr}},c.lifecycle):h("span",{style:{color:T.tt,fontSize:11}},"(no stage)"),(c.custDate||c.created)?h("div",{style:{fontSize:10,color:T.tt,marginTop:2}},String(c.custDate||c.created).slice(0,19)):null)}},{header:"Total",align:"right",mono:true,render:function(r){return fmt(nr(r.Total_Amount))},color:function(){return T.pu}},{header:"Visits",key:"Visits",align:"center",mono:true}],data:qYC.data})),
 
   yTab==="daily"&&h(Panel,null,h(SH,{icon:Ic.Trd,title:"Jazmin Daily Sales",gradient:"linear-gradient(135deg,#06b6d4,#22d3ee)"}),qYD.loading?h(Loading):qYD.error?h(Err,{msg:qYD.error}):h(React.Fragment,null,
     qYD.data&&qYD.data.length>0&&h(ResponsiveContainer,{width:"100%",height:240},h(AreaChart,{data:qYD.data},h("defs",null,h("linearGradient",{id:"yg",x1:"0",y1:"0",x2:"0",y2:"1"},h("stop",{offset:"0%",stopColor:"#ec4899",stopOpacity:.25}),h("stop",{offset:"100%",stopColor:"#8b5cf6",stopOpacity:0}))),h(CartesianGrid,{stroke:T.bL}),h(XAxis,{dataKey:"Fecha",tick:{fill:T.tt,fontSize:10},axisLine:false,tickLine:false}),h(YAxis,{tick:{fill:T.tt,fontSize:10},axisLine:false,tickLine:false,tickFormatter:function(v){return fmt(v)}}),h(Tooltip,{content:h(CTip,null)}),h(Area,{type:"monotone",dataKey:"TotalSale",stroke:"#ec4899",fill:"url(#yg)",strokeWidth:2.5,name:"Sales"}))),
