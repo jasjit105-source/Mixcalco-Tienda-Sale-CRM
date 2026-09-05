@@ -550,6 +550,76 @@ async function exportMissingCostXLSX(rows,from,to,onProgress){
 }
 window.exportMissingCostXLSX=exportMissingCostXLSX;
 
+/* ---- Jazmin commission report: styled two-sheet xlsx (Daily Summary + Tickets) ---- */
+async function exportJazminXLSX(rows,from,to){
+  if(!rows||!rows.length)return null;
+  var XL=await loadExcelJS();
+  var wb=new XL.Workbook();
+  var dayNames=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  var byDate={};
+  rows.forEach(function(r){
+    var d=String(r.Fecha).slice(0,10);
+    if(!byDate[d])byDate[d]={fecha:d,tickets:0,ventas:0,comision:0};
+    byDate[d].tickets++;byDate[d].ventas+=nr(r.Total_Amount);byDate[d].comision+=nr(r.Commission);
+  });
+  var days=Object.keys(byDate).sort().map(function(k){return byDate[k]});
+  var totSales=rows.reduce(function(s2,r){return s2+nr(r.Total_Amount)},0);
+  var totComm=rows.reduce(function(s2,r){return s2+nr(r.Commission)},0);
+  var H=4;
+  var mkTitle=function(ws,cols){
+    ws.mergeCells("A1:"+colNameFromNum(cols)+"1");
+    ws.getCell("A1").value="SAHIBA CENTRO — JAZMIN COMMISSION REPORT";
+    ws.getCell("A1").font={bold:true,size:14,color:{argb:"FFEC4899"}};
+    ws.mergeCells("A2:"+colNameFromNum(cols)+"2");
+    ws.getCell("A2").value="Period: "+from+" to "+to+" · Generated: "+todayLocal()+" · "+rows.length+" tickets · Sales $"+Math.round(totSales).toLocaleString("en-US")+" · 2% commission $"+Math.round(totComm).toLocaleString("en-US");
+    ws.getCell("A2").font={size:10,color:{argb:"FF64748B"}};
+  };
+  var hdrStyle=function(cell){cell.font={bold:true,color:{argb:"FFFFFFFF"},size:10};cell.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FFEC4899"}};};
+  var ws1=wb.addWorksheet("Daily Summary");
+  mkTitle(ws1,5);
+  ["Date","Day","Tickets","Sales","2% Commission"].forEach(function(t,i){var c=ws1.getRow(H).getCell(i+1);c.value=t;hdrStyle(c);c.alignment={horizontal:i>=2?"right":"left"};});
+  [12,8,10,14,16].forEach(function(w,i){ws1.getColumn(i+1).width=w});
+  days.forEach(function(d,i){
+    var row=ws1.getRow(H+1+i);
+    var dt=parseLocalDate(d.fecha);
+    row.getCell(1).value=d.fecha;row.getCell(2).value=dayNames[dt.getDay()];
+    row.getCell(3).value=d.tickets;row.getCell(4).value=d.ventas;row.getCell(5).value=d.comision;
+    [3,4,5].forEach(function(ci){row.getCell(ci).alignment={horizontal:"right"}});
+  });
+  var T1=H+days.length+1;
+  ws1.getRow(T1).getCell(1).value="TOTAL";ws1.getRow(T1).getCell(1).font={bold:true};
+  [3,4,5].forEach(function(ci){var L=colNameFromNum(ci);var c=ws1.getRow(T1).getCell(ci);c.value={formula:"SUM("+L+(H+1)+":"+L+(T1-1)+")"};c.font={bold:true};c.alignment={horizontal:"right"};});
+  ws1.getColumn(4).numFmt='"$"#,##0';ws1.getColumn(5).numFmt='"$"#,##0';
+  ws1.views=[{state:"frozen",ySplit:H}];
+  var ws2=wb.addWorksheet("Tickets");
+  mkTitle(ws2,9);
+  var cols2=[["Date",12],["Ticket",10],["Total",12],["2% Commission",14],["Arts",7],["Customer",22],["Phone",14],["Tracking",14],["Account",18]];
+  cols2.forEach(function(c,i){var cell=ws2.getRow(H).getCell(i+1);cell.value=c[0];hdrStyle(cell);cell.alignment={horizontal:(i>=2&&i<=4)?"right":"left"};ws2.getColumn(i+1).width=c[1];});
+  rows.forEach(function(r,i){
+    var row=ws2.getRow(H+1+i);
+    row.getCell(1).value=String(r.Fecha).slice(0,10);
+    row.getCell(2).value=r.Ticket;
+    row.getCell(3).value=nr(r.Total_Amount);
+    row.getCell(4).value=nr(r.Commission);
+    row.getCell(5).value=nr(r.Item_Count);
+    row.getCell(6).value=r.Customer||"";
+    row.getCell(7).value=r.Phone||"";
+    row.getCell(8).value=r.Guia||"";
+    row.getCell(9).value=r.Pago2||"";
+    [3,4,5].forEach(function(ci){row.getCell(ci).alignment={horizontal:"right"}});
+  });
+  var T2=H+rows.length+1;
+  ws2.getRow(T2).getCell(1).value="TOTAL";ws2.getRow(T2).getCell(1).font={bold:true};
+  [3,4,5].forEach(function(ci){var L=colNameFromNum(ci);var c=ws2.getRow(T2).getCell(ci);c.value={formula:"SUM("+L+(H+1)+":"+L+(T2-1)+")"};c.font={bold:true};c.alignment={horizontal:"right"};});
+  ws2.getColumn(3).numFmt='"$"#,##0';ws2.getColumn(4).numFmt='"$"#,##0';
+  ws2.views=[{state:"frozen",ySplit:H}];
+  var buf=await wb.xlsx.writeBuffer();
+  var blob=new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+  downloadBlob(blob,"jazmin_report_"+from+"_"+to+".xlsx");
+  return blob;
+}
+window.exportJazminXLSX=exportJazminXLSX;
+
 /* ---- Cost Update: parse an uploaded cost file, validate vs the DB, build the SQL script ----
    The POS SQL API only accepts SELECT (verified: UPDATE returns 403), so the dashboard
    cannot write costs itself. It validates and produces the exact script for the POS admin. */
@@ -1226,7 +1296,7 @@ tab==="yazmin"&&h(React.Fragment,null,
         h("div",{style:{padding:"8px 16px",borderRadius:10,background:"linear-gradient(135deg,#fdf2f8,#fce7f3)"}},h("div",{style:{fontSize:9,color:T.pk,fontWeight:700,textTransform:"uppercase"}},"Tickets"),h("div",{style:{fontSize:18,fontWeight:800,color:T.tx}},fN(qYT.data.length))),
         h("div",{style:{padding:"8px 16px",borderRadius:10,background:"linear-gradient(135deg,#f5f3ff,#ede9fe)"}},h("div",{style:{fontSize:9,color:T.pu,fontWeight:700,textTransform:"uppercase"}},"Sales"),h("div",{style:{fontSize:18,fontWeight:800,color:T.tx}},fmt(qYT.data.reduce(function(s,r){return s+nr(r.Total_Amount)},0)))),
         h("div",{style:{padding:"8px 16px",borderRadius:10,background:"linear-gradient(135deg,#ecfdf5,#d1fae5)"}},h("div",{style:{fontSize:9,color:T.gn,fontWeight:700,textTransform:"uppercase"}},"2% Commission"),h("div",{style:{fontSize:18,fontWeight:800,color:T.tx}},fmt(qYT.data.reduce(function(s,r){return s+nr(r.Commission)},0)))),
-        h("button",{onClick:function(){generateJazminPDF(qYT.data,yFrom,yTo)},style:{padding:"8px 16px",borderRadius:10,background:"linear-gradient(135deg,#6366f1,#818cf8)",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:6}},"\ud83d\udcc4 PDF"))),
+        h("button",{onClick:function(){exportJazminXLSX(qYT.data,yFrom,yTo)},style:{padding:"8px 16px",borderRadius:10,background:"linear-gradient(135deg,#10b981,#34d399)",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:6}},"⤓ Excel"),h("button",{onClick:function(){generateJazminPDF(qYT.data,yFrom,yTo)},style:{padding:"8px 16px",borderRadius:10,background:"linear-gradient(135deg,#6366f1,#818cf8)",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:6}},"\ud83d\udcc4 PDF"))),
     h("div",{style:{display:"flex",gap:4}},["tickets","customers","daily","big"].map(function(t){return h(TabBtn,{key:t,active:yTab===t,label:{tickets:"Tickets",customers:"Top Customers",daily:"Daily",big:"Big Tickets"}[t],onClick:function(){setYTab(t)}})}))),
 
   yTab==="tickets"&&h(Panel,null,h(SH,{icon:Ic.Cart,title:"Jazmin Tickets",sub:"With 2% commission",action:h(CSVBtn,{rows:qYT.data,name:"jazmin_tickets"}),gradient:"linear-gradient(135deg,#ec4899,#f472b6)"}),qYT.loading?h(Loading):qYT.error?h(Err,{msg:qYT.error}):h(DT,{columns:[{header:"Date",key:"Fecha",mono:true},{header:"Ticket",key:"Ticket",mono:true,color:function(){return T.pr}},{header:"Total",align:"right",mono:true,render:function(r){return fmt(nr(r.Total_Amount))},color:function(){return T.pu}},{header:"2% Commission",align:"right",mono:true,render:function(r){return fmt(nr(r.Commission))},color:function(){return T.gn}},{header:"Arts",key:"Item_Count",align:"center",mono:true},{header:"Customer",key:"Customer"},{header:"Phone",key:"Phone",mono:true},{header:"Tracking",key:"Guia",mono:true},{header:"Account",key:"Pago2",mono:true,color:function(){return T.am}}],data:qYT.data})),
