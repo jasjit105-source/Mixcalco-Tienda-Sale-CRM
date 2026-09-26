@@ -9,3 +9,7 @@
   from = "/api/img"
   to = "/.netlify/functions/img"
   status = 200
+[[redirects]]
+  from = "/V1/query"
+  to = "/.netlify/functions/query"
+  status = 200
