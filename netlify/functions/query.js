@@ -46,7 +46,9 @@ exports.handler = async (event) => {
     }
     return { statusCode: res.status, headers: Object.assign({ "Content-Type": "application/json" }, corsHeaders()), body: data };
   } catch (e) {
-    const msg = e.name === "AbortError" ? "The data server did not respond (timeout). Please try again." : e.message;
+    const msg = e.name === "AbortError"
+      ? "The data server did not respond (timeout). Please try again."
+      : "The store data server is OFFLINE - the Cloudflare tunnel on the store computer is not running (or its URL changed after a restart). Restart the tunnel there, send the new trycloudflare URL, and update SAHIBA_API_BASE on this Netlify site.";
     return { statusCode: 502, headers: Object.assign({ "Content-Type": "application/json" }, corsHeaders()), body: JSON.stringify({ status: "error", message: msg }) };
   }
 };
