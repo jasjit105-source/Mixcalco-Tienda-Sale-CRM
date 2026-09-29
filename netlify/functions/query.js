@@ -44,6 +44,15 @@ exports.handler = async (event) => {
     if (!res.ok && /<html/i.test(data) && /ngrok/i.test(data)) {
       return { statusCode: 503, headers: Object.assign({ "Content-Type": "application/json" }, corsHeaders()), body: JSON.stringify({ status: "error", message: "The store data server is OFFLINE — the ngrok tunnel is not running. Start the tunnel program on the store computer (and check its internet), then refresh this page." }) };
     }
+    // Since 2026-09-29 the program answering on the store side rejects our API token
+    // on every path (401) and rate-limits bursts (429). Its errors use FastAPI's
+    // {detail} shape, which the dashboard does not display — translate to {message}.
+    if (res.status === 401 || res.status === 403) {
+      return { statusCode: res.status, headers: Object.assign({ "Content-Type": "application/json" }, corsHeaders()), body: JSON.stringify({ status: "error", message: "The store computer rejected the access token — the SQL API program there was changed or reinstalled. Ask whoever manages the store PC for the new API token (or restore the old program), then this dashboard will reconnect." }) };
+    }
+    if (res.status === 429) {
+      return { statusCode: res.status, headers: Object.assign({ "Content-Type": "application/json" }, corsHeaders()), body: JSON.stringify({ status: "error", message: "The store computer is refusing requests (too many at once). Wait one minute and refresh. If it keeps happening, the SQL API program on the store PC was changed and needs checking." }) };
+    }
     return { statusCode: res.status, headers: Object.assign({ "Content-Type": "application/json" }, corsHeaders()), body: data };
   } catch (e) {
     const msg = e.name === "AbortError"
