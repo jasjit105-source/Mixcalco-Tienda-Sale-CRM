@@ -70,6 +70,7 @@ const API_URL="/api/query";
 const API_TOKEN="";
 /* Agent access: ?agent=<name> locks the app to that agent's tab behind a passcode */
 const AGENT_PINS={jazmin:"2025"};
+const MAIN_PIN="1960";
 const TR_ES={"Sales, clients, commissions":"Ventas, clientes y comisiones","From":"Desde","To":"Hasta","Today":"Hoy","Yesterday":"Ayer","Last 7 days":"Últimos 7 días","This month":"Este mes","Sales":"Ventas","2% Commission":"Comisión 2%","Top Customers":"Mejores Clientes","Daily":"Diario","Big Tickets":"Tickets Grandes","Jazmin Tickets":"Tickets de Jazmin","With 2% commission":"Con comisión del 2%","Date":"Fecha","Total":"Total","Customer":"Cliente","Phone":"Teléfono","Customer Since":"Cliente Desde","Lifecycle":"Ciclo de Vida","Tracking":"Guía","Account":"Cuenta","Store":"Tienda","Seller":"Vendedor","Payment":"Pago","Code":"Código","Description":"Descripción","Qty":"Cant.","Price":"Precio","Visits":"Visitas","Sale":"Venta","Top 50 Customers by Amount":"Top 50 Clientes por Monto","Jazmin Daily Sales":"Ventas Diarias de Jazmin","Purchase History":"Historial de Compras","← Back":"← Regresar","← Back to history":"← Regresar al historial","Tickets (all time)":"Tickets (histórico)","Total Purchased":"Total Comprado","First Purchase":"Primera Compra","Last Purchase":"Última Compra","Total: ":"Total: ","Items: ":"Artículos: ","Payment: ":"Pago: ","No tickets found for this phone number":"No se encontraron tickets para este teléfono","No items found for this ticket":"No se encontraron artículos en este ticket","not in CSV":"no está en el CSV"," contacts loaded":" contactos cargados"," tickets lifetime":" tickets en total","Commission Report":"Reporte de Comisiones","Period":"Período","to":"al","Generated":"Generado","Total Tickets":"Total de Tickets","Total Sales":"Ventas Totales","Daily Summary":"Resumen Diario","Ticket Detail":"Detalle de Tickets","Day":"Día","Ticket #":"Ticket #","Commission":"Comisión","Items":"Artículos","Tickets":"Tickets","Ticket":"Ticket","Arts":"Arts","Customers":"Clientes","All Customers":"Todos los Clientes","All-time · highest first":"Histórico · mayores primero","All":"Todos","Inactive +30 days":"Inactivos +30 días","days":"días"};
 function tr(s2){return AGENT_MODE&&TR_ES[s2]!==undefined?TR_ES[s2]:s2;}
 var AGENT_MODE=(function(){try{var a=new URLSearchParams(window.location.search).get("agent");return a&&AGENT_PINS[a]?a:null}catch(e){return null}})();
@@ -1036,11 +1037,12 @@ function buildPrediction(allData,predStart,predEnd){
 function App(){
 var st=useState,cb=useCallback;
 var s1=st(AGENT_MODE?"yazmin":"overview"),tab=s1[0],setTab=s1[1];
-var sLK=st((function(){if(!AGENT_MODE)return false;try{return localStorage.getItem("sahiba_agent_ok_"+AGENT_MODE)!=="1"}catch(e){return true}})()),agentLocked=sLK[0],setAgentLocked=sLK[1];
+var sLK=st((function(){try{if(AGENT_MODE)return localStorage.getItem("sahiba_agent_ok_"+AGENT_MODE)!=="1";return localStorage.getItem("sahiba_main_ok")!=="1"}catch(e){return true}})()),agentLocked=sLK[0],setAgentLocked=sLK[1];
 var sPI=st(""),pinInput=sPI[0],setPinInput=sPI[1];
 var sPE=st(false),pinErr=sPE[0],setPinErr=sPE[1];
 var tryUnlock=function(){
-  if(pinInput===AGENT_PINS[AGENT_MODE]){try{localStorage.setItem("sahiba_agent_ok_"+AGENT_MODE,"1")}catch(e){}setAgentLocked(false);setPinErr(false);}
+  var want=AGENT_MODE?AGENT_PINS[AGENT_MODE]:MAIN_PIN;
+  if(pinInput===want){try{localStorage.setItem(AGENT_MODE?"sahiba_agent_ok_"+AGENT_MODE:"sahiba_main_ok","1")}catch(e){}setAgentLocked(false);setPinErr(false);}
   else{setPinErr(true);setPinInput("");}
 };
 var s2=st(null),selStore=s2[0],setSelStore=s2[1];
@@ -1367,14 +1369,14 @@ var tot=useMemo(function(){if(!qStore.data)return{tickets:0,sales:0,profit:0,pro
 var salesDelta=useMemo(function(){if(!qStorePrev.data)return null;var p=qStorePrev.data.reduce(function(s,r){return s+nr(r.Total_Sales)},0);return p>0?((tot.sales-p)/p*100):null;},[qStorePrev.data,tot.sales]);
 var pieData=useMemo(function(){return(qStore.data||[]).filter(function(s){return nr(s.Total_Sales)>0}).map(function(s,i){return{name:s.Store_Name,value:nr(s.Total_Sales),color:SC[stores.indexOf(s.Store_Name)]||SC[i]}})},[qStore.data]);
 
-if(AGENT_MODE&&agentLocked)return h("div",{style:{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20}},
+if(agentLocked)return h("div",{style:{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20}},
   h("div",{className:"panel",style:{maxWidth:360,width:"100%",textAlign:"center",padding:36}},
-    h("div",{style:{width:56,height:56,borderRadius:16,background:"linear-gradient(135deg,#ec4899,#f472b6)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:22,color:"#fff",margin:"0 auto 14px"}},"J"),
-    h("h2",{style:{fontSize:18,fontWeight:800,marginBottom:4}},"Jazmin CRM"),
-    h("div",{style:{fontSize:12,color:T.tt,marginBottom:18}},"Escribe tu código de acceso"),
-    h("input",{type:"password",inputMode:"numeric",value:pinInput,onChange:function(e){setPinInput(e.target.value);setPinErr(false)},onKeyDown:function(e){if(e.key==="Enter")tryUnlock()},placeholder:"Código",autoFocus:true,style:{width:"100%",padding:"12px 16px",border:"1.5px solid "+(pinErr?"#fca5a5":T.border),borderRadius:12,fontSize:16,textAlign:"center",letterSpacing:6,outline:"none",fontFamily:"inherit",boxSizing:"border-box",marginBottom:12}}),
-    pinErr&&h("div",{style:{color:T.rd,fontSize:12,marginBottom:10,fontWeight:600}},"Código incorrecto — intenta de nuevo"),
-    h("button",{onClick:tryUnlock,style:{width:"100%",padding:"12px",borderRadius:12,border:"none",background:"linear-gradient(135deg,#ec4899,#f472b6)",color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}},"Entrar")));
+    h("div",{style:{width:56,height:56,borderRadius:16,background:AGENT_MODE?"linear-gradient(135deg,#ec4899,#f472b6)":"linear-gradient(135deg,#6366f1,#818cf8)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:22,color:"#fff",margin:"0 auto 14px"}},AGENT_MODE?"J":"S"),
+    h("h2",{style:{fontSize:18,fontWeight:800,marginBottom:4}},AGENT_MODE?"Jazmin CRM":"Sahiba Centro"),
+    h("div",{style:{fontSize:12,color:T.tt,marginBottom:18}},AGENT_MODE?"Escribe tu código de acceso":"Enter your access code"),
+    h("input",{type:"password",inputMode:"numeric",value:pinInput,onChange:function(e){setPinInput(e.target.value);setPinErr(false)},onKeyDown:function(e){if(e.key==="Enter")tryUnlock()},placeholder:AGENT_MODE?"Código":"Code",autoFocus:true,style:{width:"100%",padding:"12px 16px",border:"1.5px solid "+(pinErr?"#fca5a5":T.border),borderRadius:12,fontSize:16,textAlign:"center",letterSpacing:6,outline:"none",fontFamily:"inherit",boxSizing:"border-box",marginBottom:12}}),
+    pinErr&&h("div",{style:{color:T.rd,fontSize:12,marginBottom:10,fontWeight:600}},AGENT_MODE?"Código incorrecto — intenta de nuevo":"Incorrect code — try again"),
+    h("button",{onClick:tryUnlock,style:{width:"100%",padding:"12px",borderRadius:12,border:"none",background:AGENT_MODE?"linear-gradient(135deg,#ec4899,#f472b6)":"linear-gradient(135deg,#6366f1,#818cf8)",color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}},AGENT_MODE?"Entrar":"Enter")));
 return h("div",{style:{minHeight:"100vh"}},
 // HEADER
 h("header",{style:{padding:"14px 28px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid "+T.border,background:"rgba(255,255,255,.8)",backdropFilter:"blur(16px)",position:"sticky",top:0,zIndex:100,gap:16}},
