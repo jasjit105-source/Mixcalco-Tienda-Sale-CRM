@@ -71,7 +71,7 @@ const API_TOKEN="";
 /* Agent access: ?agent=<name> locks the app to that agent's tab behind a passcode */
 const AGENT_PINS={jazmin:"2025"};
 const MAIN_PIN="1960";
-const TR_ES={"Sales, clients, commissions":"Ventas, clientes y comisiones","From":"Desde","To":"Hasta","Today":"Hoy","Yesterday":"Ayer","Last 7 days":"Últimos 7 días","This month":"Este mes","Sales":"Ventas","2% Commission":"Comisión 2%","Top Customers":"Mejores Clientes","Daily":"Diario","Big Tickets":"Tickets Grandes","Jazmin Tickets":"Tickets de Jazmin","With 2% commission":"Con comisión del 2%","Date":"Fecha","Total":"Total","Customer":"Cliente","Phone":"Teléfono","Customer Since":"Cliente Desde","Lifecycle":"Ciclo de Vida","Tracking":"Guía","Account":"Cuenta","Store":"Tienda","Seller":"Vendedor","Payment":"Pago","Code":"Código","Description":"Descripción","Qty":"Cant.","Price":"Precio","Visits":"Visitas","Sale":"Venta","Top 50 Customers by Amount":"Top 50 Clientes por Monto","Jazmin Daily Sales":"Ventas Diarias de Jazmin","Purchase History":"Historial de Compras","← Back":"← Regresar","← Back to history":"← Regresar al historial","Tickets (all time)":"Tickets (histórico)","Total Purchased":"Total Comprado","First Purchase":"Primera Compra","Last Purchase":"Última Compra","Total: ":"Total: ","Items: ":"Artículos: ","Payment: ":"Pago: ","No tickets found for this phone number":"No se encontraron tickets para este teléfono","No items found for this ticket":"No se encontraron artículos en este ticket","not in CSV":"no está en el CSV"," contacts loaded":" contactos cargados"," tickets lifetime":" tickets en total","Commission Report":"Reporte de Comisiones","Period":"Período","to":"al","Generated":"Generado","Total Tickets":"Total de Tickets","Total Sales":"Ventas Totales","Daily Summary":"Resumen Diario","Ticket Detail":"Detalle de Tickets","Day":"Día","Ticket #":"Ticket #","Commission":"Comisión","Items":"Artículos","Tickets":"Tickets","Ticket":"Ticket","Arts":"Arts","Customers":"Clientes","All Customers":"Todos los Clientes","All-time · highest first":"Histórico · mayores primero","All":"Todos","Inactive +30 days":"Inactivos +30 días","days":"días"};
+const TR_ES={"Sales, clients, commissions":"Ventas, clientes y comisiones","From":"Desde","To":"Hasta","Today":"Hoy","Yesterday":"Ayer","Last 7 days":"Últimos 7 días","This month":"Este mes","Sales":"Ventas","2% Commission":"Comisión 2%","Top Customers":"Mejores Clientes","Daily":"Diario","Big Tickets":"Tickets Grandes","Jazmin Tickets":"Tickets de Jazmin","With 2% commission":"Con comisión del 2%","Date":"Fecha","Total":"Total","Customer":"Cliente","Phone":"Teléfono","Customer Since":"Cliente Desde","Lifecycle":"Ciclo de Vida","Tracking":"Guía","Account":"Cuenta","Store":"Tienda","Seller":"Vendedor","Payment":"Pago","Code":"Código","Description":"Descripción","Qty":"Cant.","Price":"Precio","Visits":"Visitas","Sale":"Venta","Top 50 Customers by Amount":"Top 50 Clientes por Monto","Jazmin Daily Sales":"Ventas Diarias de Jazmin","Purchase History":"Historial de Compras","← Back":"← Regresar","← Back to history":"← Regresar al historial","Tickets (all time)":"Tickets (histórico)","Total Purchased":"Total Comprado","First Purchase":"Primera Compra","Last Purchase":"Última Compra","Total: ":"Total: ","Items: ":"Artículos: ","Payment: ":"Pago: ","No tickets found for this phone number":"No se encontraron tickets para este teléfono","No items found for this ticket":"No se encontraron artículos en este ticket","not in CSV":"no está en el CSV"," contacts loaded":" contactos cargados"," tickets lifetime":" tickets en total","Commission Report":"Reporte de Comisiones","Period":"Período","to":"al","Generated":"Generado","Total Tickets":"Total de Tickets","Total Sales":"Ventas Totales","Daily Summary":"Resumen Diario","Ticket Detail":"Detalle de Tickets","Day":"Día","Ticket #":"Ticket #","Commission":"Comisión","Items":"Artículos","Tickets":"Tickets","Ticket":"Ticket","Arts":"Arts","Customers":"Clientes","All Customers":"Todos los Clientes","All-time · highest first":"Histórico · mayores primero","All":"Todos","Inactive +30 days":"Inactivos +30 días","days":"días","Customers by Style":"Clientes por Modelo","Find who bought a style, how many pieces, at what prices":"Quién compró un modelo, cuántas piezas y a qué precios","Search":"Buscar","Clear":"Limpiar","All time":"Histórico","Use dates above":"Usar fechas de arriba","Pieces":"Piezas","Prices paid":"Precios pagados","Avg price":"Precio prom.","Spent":"Gastado","Unique customers":"Clientes únicos","Matching tickets":"Tickets con el modelo","Unidentified (no phone)":"Sin identificar (sin tel.)","not included in the rows below":"no incluidos en las filas de abajo","No purchases found for this style":"No hay compras de este modelo","Type a style number, e.g. 517VE":"Escribe un modelo, ej. 517VE","Purchase details":"Detalle de compras","Full purchase history →":"Historial completo de compras →","List":"Lista","Paid":"Pagado","Line Total":"Total Línea","pcs":"pzs","Style":"Modelo"};
 function tr(s2){return AGENT_MODE&&TR_ES[s2]!==undefined?TR_ES[s2]:s2;}
 var AGENT_MODE=(function(){try{var a=new URLSearchParams(window.location.search).get("agent");return a&&AGENT_PINS[a]?a:null}catch(e){return null}})();
 
@@ -129,6 +129,8 @@ yazminTickets:()=>"SELECT CONVERT(DATE,FECHA) AS Fecha,NO_REFEREN AS Ticket,SUM(
 yazminDaily:()=>"SELECT CONVERT(DATE,FECHA) AS Fecha,ROUND(SUM(Cantidad*Precio_Venta),0) AS TotalSale,COUNT(DISTINCT NO_REFEREN) AS Tickets FROM MOVS_CIRCUNVALACION WHERE FECHA BETWEEN '{{fecha_inicio}}' AND '{{fecha_fin}}' AND Movimiento='TK' AND Vendedor='YAZMIN' GROUP BY CONVERT(DATE,FECHA) ORDER BY CONVERT(DATE,FECHA)",
 
 yazminTopCustomers:()=>"SELECT ISNULL(MAX(CustCliente),'') AS Customer,CustPhone AS Phone,ROUND(SUM(Cantidad*Precio_Venta),0) AS Total_Amount,COUNT(DISTINCT NO_REFEREN) AS Visits,CONVERT(VARCHAR(10),MIN(FECHA),23) AS FirstBuy,CONVERT(VARCHAR(10),MAX(FECHA),23) AS LastBuy FROM MOVS_CIRCUNVALACION WHERE Movimiento='TK' AND Vendedor='YAZMIN' AND CustPhone IS NOT NULL AND LTRIM(RTRIM(CustPhone))<>'' GROUP BY CustPhone ORDER BY Total_Amount DESC",
+yazminStyleList:()=>"SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) AS Style,SUM(Cantidad) AS Qty,COUNT(DISTINCT NO_REFEREN) AS Tks FROM MOVS_CIRCUNVALACION WHERE Movimiento='TK' AND Vendedor='YAZMIN' GROUP BY LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) ORDER BY Style",
+yazminStyleLines:(art,ranged)=>"SELECT CONVERT(VARCHAR(10),FECHA,23) AS Fecha,NO_REFEREN AS Ticket,Articulo,Cantidad,Precio,Precio_Venta,LTRIM(RTRIM(ISNULL(CustPhone,''))) AS Phone,LTRIM(RTRIM(ISNULL(CustCliente,''))) AS Customer FROM MOVS_CIRCUNVALACION WHERE Movimiento='TK' AND Vendedor='YAZMIN' AND (Articulo='"+art+"' OR Articulo LIKE '"+art+"-%')"+(ranged?" AND FECHA BETWEEN '{{fecha_inicio}}' AND '{{fecha_fin}}'":"")+" ORDER BY FECHA,NO_REFEREN",
 
 yazminBigTickets:()=>"SELECT CONVERT(DATE,FECHA) AS Fecha,NO_REFEREN AS Ticket,MIN(CustCliente) AS Customer,MIN(CustPhone) AS Phone,SUM(Cantidad*Precio_Venta) AS Total_Amount,COUNT(*) AS Items FROM MOVS_CIRCUNVALACION WHERE FECHA BETWEEN '{{fecha_inicio}}' AND '{{fecha_fin}}' AND Movimiento='TK' AND Vendedor='YAZMIN' GROUP BY CONVERT(DATE,FECHA),NO_REFEREN HAVING SUM(Cantidad*Precio_Venta)>=10000 ORDER BY Total_Amount DESC",
 
@@ -838,11 +840,11 @@ function TabBtn({active,label,onClick,count,color}){
   return h("button",{onClick:onClick,style:{padding:"7px 16px",borderRadius:10,border:"none",background:active?bg:"transparent",color:active?"#fff":(color||T.ts),fontSize:12.5,fontWeight:active?700:500,cursor:"pointer",display:"flex",alignItems:"center",gap:6,fontFamily:"inherit",transition:"all .2s",boxShadow:active?"0 3px 12px "+bg+"40":"none"}},label,count!=null&&h("span",{style:{fontSize:9.5,padding:"2px 7px",borderRadius:10,background:active?"rgba(255,255,255,.25)":"#e8ebf0",color:active?"#fff":T.tt,fontWeight:600}},count));
 }
 
-function DT({columns,data,empty}){
+function DT({columns,data,empty,sort,onSort}){
   if(!data||!data.length)return h("div",{style:{textAlign:"center",padding:44,color:T.tt,fontSize:13}},empty||"No data");
   return h("div",{style:{overflowX:"auto",borderRadius:14,border:"1px solid "+T.border,background:"rgba(255,255,255,.6)"}},
     h("table",null,
-      h("thead",null,h("tr",null,columns.map(function(c,i){return h("th",{key:i,style:{padding:"12px 16px",textAlign:c.align||"left",color:T.pr,fontWeight:700,fontSize:10.5,textTransform:"uppercase",letterSpacing:.8,background:"linear-gradient(135deg,#f8faff,#f0f4ff)",borderBottom:"2px solid rgba(99,102,241,.1)",whiteSpace:"nowrap"}},c.header)}))),
+      h("thead",null,h("tr",null,columns.map(function(c,i){var srt=onSort&&c.sortId;return h("th",{key:i,onClick:srt?function(){onSort(c.sortId)}:undefined,style:{padding:"12px 16px",textAlign:c.align||"left",color:T.pr,fontWeight:700,fontSize:10.5,textTransform:"uppercase",letterSpacing:.8,background:"linear-gradient(135deg,#f8faff,#f0f4ff)",borderBottom:"2px solid rgba(99,102,241,.1)",whiteSpace:"nowrap",cursor:srt?"pointer":undefined,userSelect:srt?"none":undefined}},c.header,srt&&sort&&sort.key===c.sortId?(sort.dir<0?" ↓":" ↑"):"")}))),
       h("tbody",null,data.map(function(row,ri){return h("tr",{key:ri,className:"hr",style:{background:ri%2===1?"rgba(99,102,241,.02)":"transparent"}},columns.map(function(c,ci){return h("td",{key:ci,style:{padding:"10px 16px",borderBottom:"1px solid "+T.bL,color:c.color?c.color(row):T.tx,textAlign:c.align||"left",fontWeight:c.bold?600:400,fontFamily:c.mono?"'JetBrains Mono',monospace":"inherit",whiteSpace:"nowrap",fontSize:12.5}},c.render?c.render(row,ri):row[c.key])}))}))));
 }
 
@@ -1344,6 +1346,85 @@ var yCust=useMemo(function(){
 var qYD=useQuery(SQL.yazminDaily(),{fecha_inicio:yfd1,fecha_fin:yfd2},[yfd1,yfd2,"yd",yEn],yEn);
 var qYB=useQuery(SQL.yazminBigTickets(),{fecha_inicio:yfd1,fecha_fin:yfd2},[yfd1,yfd2,"yb",yEn],yEn);
 
+/* ---- Customers by Style (Jazmin) ---- */
+var s104=st(""),ycsInput=s104[0],setYcsInput=s104[1];
+var s105=st(false),ycsSug=s105[0],setYcsSug=s105[1];
+var s106=st(true),ycsAllTime=s106[0],setYcsAllTime=s106[1];
+var s107=st(null),ycsRes=s107[0],setYcsRes=s107[1];
+var s108=st({key:"pieces",dir:-1}),ycsSort=s108[0],setYcsSort=s108[1];
+var s109=st(null),ycsSel=s109[0],setYcsSel=s109[1];
+var ycsOn=yEn&&yTab==="customers";
+var qYSL=useQuery(SQL.yazminStyleList(),{},["ysl",ycsOn],ycsOn);
+var ycsMatches=useMemo(function(){
+  var q2=ycsInput.trim().toUpperCase();
+  if(!q2)return[];
+  var all=qYSL.data||[];
+  var pre=all.filter(function(r){return String(r.Style).indexOf(q2)===0});
+  var sub=all.filter(function(r){return String(r.Style).indexOf(q2)>0});
+  return pre.concat(sub).slice(0,8);
+},[ycsInput,qYSL.data]);
+var doStyleSearch=function(style2){
+  var art=String(style2||ycsInput).trim().toUpperCase().replace(/['";%]/g,"");
+  if(!art)return;
+  setYcsInput(art);setYcsSug(false);setYcsSel(null);
+  var ranged=!ycsAllTime;
+  setYcsRes({style:art,allTime:!ranged,from:yFrom,to:yTo,loading:true,rows:null,error:null});
+  runQuery(SQL.yazminStyleLines(art,ranged),ranged?{fecha_inicio:yfd1,fecha_fin:yfd2}:{})
+    .then(function(r){setYcsRes(function(pv){return Object.assign({},pv,{loading:false,rows:r||[]})})})
+    .catch(function(e2){setYcsRes(function(pv){return Object.assign({},pv,{loading:false,error:e2.message})})});
+};
+var ycsOnSort=function(id){setYcsSort(function(pv){return pv.key===id?{key:id,dir:-pv.dir}:{key:id,dir:id==="customer"?1:-1}})};
+var ycsAgg=useMemo(function(){
+  if(!ycsRes||!ycsRes.rows)return null;
+  var cust={},unid={pieces:0,amount:0,tickets:{}},allTickets={};
+  ycsRes.rows.forEach(function(r){
+    var qty=nr(r.Cantidad),amt=qty*nr(r.Precio_Venta);
+    allTickets[r.Ticket]=1;
+    var ph=normPhone(r.Phone);
+    var key2=(ph&&ph.length>=7)?("P"+ph):(String(r.Customer||"").trim()?("N"+String(r.Customer).trim().toUpperCase()):null);
+    if(!key2){unid.pieces+=qty;unid.amount+=amt;unid.tickets[r.Ticket]=1;return;}
+    var e=cust[key2];
+    if(!e){e=cust[key2]={key:key2,Customer:r.Customer||"",Phone:(ph&&ph.length>=7)?r.Phone:"",pieces:0,amount:0,tickets:{},prices:{},first:r.Fecha,last:r.Fecha,lines:[]};}
+    if(String(r.Customer||"").length>String(e.Customer||"").length)e.Customer=r.Customer;
+    e.pieces+=qty;e.amount+=amt;e.tickets[r.Ticket]=1;
+    var pk=nr(r.Precio_Venta);e.prices[pk]=(e.prices[pk]||0)+qty;
+    if(r.Fecha<e.first)e.first=r.Fecha;
+    if(r.Fecha>e.last)e.last=r.Fecha;
+    e.lines.push(r);
+  });
+  var rows2=Object.keys(cust).map(function(k2){
+    var e=cust[k2];
+    e.ticketCount=Object.keys(e.tickets).length;
+    e.avg=e.pieces?e.amount/e.pieces:0;
+    e.priceList=Object.keys(e.prices).map(function(pz){return{price:+pz,qty:e.prices[pz]}}).sort(function(a,b){return b.qty-a.qty});
+    return e;
+  });
+  unid.ticketCount=Object.keys(unid.tickets).length;
+  var tp=unid.pieces,ta=unid.amount;
+  rows2.forEach(function(e){tp+=e.pieces;ta+=e.amount});
+  return{rows:rows2,unid:unid,totPieces:tp,totAmount:ta,totTickets:Object.keys(allTickets).length};
+},[ycsRes]);
+var ycsSorted=useMemo(function(){
+  if(!ycsAgg)return[];
+  var arr=ycsAgg.rows.slice(),k2=ycsSort.key,dd=ycsSort.dir;
+  arr.sort(function(a,b){
+    if(k2==="customer"||k2==="first"||k2==="last"){
+      var va2=k2==="customer"?String(a.Customer||"").toUpperCase():a[k2];
+      var vb2=k2==="customer"?String(b.Customer||"").toUpperCase():b[k2];
+      return(va2<vb2?-1:va2>vb2?1:0)*dd;
+    }
+    var na={pieces:a.pieces,tickets:a.ticketCount,avg:a.avg,amount:a.amount}[k2]||0;
+    var nb={pieces:b.pieces,tickets:b.ticketCount,avg:b.avg,amount:b.amount}[k2]||0;
+    return(na-nb)*dd;
+  });
+  return arr;
+},[ycsAgg,ycsSort]);
+var ycsCsvRows=function(){
+  if(!ycsAgg||!ycsRes)return[];
+  var per=ycsRes.allTime?"All time":(ycsRes.from+" to "+ycsRes.to);
+  return ycsSorted.map(function(e){return{Customer:titleCase(e.Customer||"")||"(no name)",Phone:e.Phone||"",Style:ycsRes.style,Pieces:e.pieces,Tickets:e.ticketCount,Prices_Paid:e.priceList.map(function(pz){return pz.qty+" x $"+pz.price}).join(" | "),Avg_Price:e.avg.toFixed(2),Total_Spent:Math.round(e.amount),First_Purchase:e.first,Last_Purchase:e.last,Period:per}});
+};
+
 var rsfd1=fmtD(rsFrom),rsfd2=fmtD(rsTo);
 var qRS=useQuery(SQL.regularSales(),{fecha1:rsfd1,fecha2:rsfd2},[rsfd1,rsfd2,"rs",tab==="report"],tab==="report");
 var s85=st("report"),rsView=s85[0],setRsView=s85[1];
@@ -1489,6 +1570,58 @@ tab==="yazmin"&&h(React.Fragment,null,
     })())),
 
   !custView&&yTab==="tickets"&&h(Panel,null,h(SH,{icon:Ic.Cart,title:tr("Jazmin Tickets"),sub:tr("With 2% commission"),action:h(CSVBtn,{rows:qYT.data,name:"jazmin_tickets"}),gradient:"linear-gradient(135deg,#ec4899,#f472b6)"}),qYT.loading?h(Loading):qYT.error?h(Err,{msg:qYT.error}):h(DT,{columns:[{header:tr("Date"),key:"Fecha",mono:true},{header:tr("Ticket"),key:"Ticket",mono:true,render:function(r){return h("span",{onClick:function(){openJazminTicket(r)},style:{color:T.pr,cursor:"pointer",fontWeight:700,textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:3}},r.Ticket)}},{header:tr("Total"),align:"right",mono:true,render:function(r){return fmt(nr(r.Total_Amount))},color:function(){return T.pu}},{header:tr("2% Commission"),align:"right",mono:true,render:function(r){return fmt(nr(r.Commission))},color:function(){return T.gn}},{header:tr("Arts"),key:"Item_Count",align:"center",mono:true},{header:tr("Customer"),key:"Customer",render:custNameCell},{header:tr("Phone"),key:"Phone",mono:true},{header:tr("Customer Since"),render:function(r){var f=fsMap[normPhone(r.Phone)];return f?h("div",null,h("div",{style:{fontFamily:"'JetBrains Mono',monospace",fontSize:12,fontWeight:600}},f.first),h("div",{style:{fontSize:10,color:T.tt}},fN(f.tk)+tr(" tickets lifetime"))):h("span",{style:{color:T.tt}},"—")}},{header:tr("Lifecycle"),render:function(r){if(!ioCsv||!ioCsv.map)return h("span",{style:{color:T.tt,fontSize:10}},"—");var c=ioCsv.map[normPhone(r.Phone)];if(!c)return h("span",{style:{color:T.tt,fontSize:11}},tr("not in CSV"));return h("div",null,c.lifecycle?h("span",{className:"chip",style:{background:"#eef2ff",color:T.pr}},c.lifecycle):h("span",{style:{color:T.tt,fontSize:11}},"(no stage)"),(c.custDate||c.created)?h("div",{style:{fontSize:10,color:T.tt,marginTop:2}},String(c.custDate||c.created).slice(0,19)):null)}},{header:tr("Tracking"),key:"Guia",mono:true},{header:tr("Account"),key:"Pago2",mono:true,color:function(){return T.am}}],data:qYT.data})),
+
+  !custView&&yTab==="customers"&&h(Panel,null,
+  h(SH,{icon:Ic.Sch,title:tr("Customers by Style"),sub:tr("Find who bought a style, how many pieces, at what prices"),gradient:"linear-gradient(135deg,#6366f1,#a78bfa)",action:(ycsAgg&&ycsSorted.length?h("button",{onClick:function(){downloadCSV("style_"+ycsRes.style+"_"+(ycsRes.allTime?"alltime":ycsRes.from+"_"+ycsRes.to),ycsCsvRows())},style:{padding:"7px 14px",borderRadius:10,border:"1px solid "+T.border,background:"rgba(16,185,129,.08)",color:T.gn,fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}},"\u2913 CSV"):null)}),
+  h("div",{style:{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:14}},
+    h("div",{style:{position:"relative",flex:"0 1 260px"}},
+      h("input",{value:ycsInput,placeholder:tr("Type a style number, e.g. 517VE"),onChange:function(ev){setYcsInput(ev.target.value.toUpperCase());setYcsSug(true)},onFocus:function(){setYcsSug(true)},onBlur:function(){setTimeout(function(){setYcsSug(false)},180)},onKeyDown:function(ev){if(ev.key==="Enter")doStyleSearch()},style:{width:"100%",padding:"9px 14px",border:"1.5px solid "+T.border,borderRadius:10,fontSize:13,outline:"none",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,boxSizing:"border-box"}}),
+      ycsSug&&ycsMatches.length>0&&h("div",{style:{position:"absolute",top:"105%",left:0,right:0,background:"#fff",border:"1px solid "+T.border,borderRadius:10,boxShadow:"0 8px 24px rgba(0,0,0,.12)",zIndex:50,overflow:"hidden"}},
+        ycsMatches.map(function(m2){return h("div",{key:m2.Style,onMouseDown:function(){doStyleSearch(m2.Style)},className:"hr",style:{padding:"8px 14px",cursor:"pointer",display:"flex",justifyContent:"space-between",gap:10,fontSize:12.5,borderBottom:"1px solid "+T.bL}},h("span",{style:{fontFamily:"'JetBrains Mono',monospace",fontWeight:700}},m2.Style),h("span",{style:{color:T.tt,fontSize:11}},fN(nr(m2.Qty))+" "+tr("pcs")))}))),
+    h(TabBtn,{active:ycsAllTime,label:tr("All time"),onClick:function(){setYcsAllTime(true)}}),
+    h(TabBtn,{active:!ycsAllTime,label:tr("Use dates above"),onClick:function(){setYcsAllTime(false)}}),
+    h("button",{onClick:function(){doStyleSearch()},style:{padding:"9px 20px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#6366f1,#818cf8)",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}},tr("Search")),
+    h("button",{onClick:function(){setYcsInput("");setYcsRes(null);setYcsSel(null)},style:{padding:"9px 16px",borderRadius:10,border:"1px solid "+T.border,background:"transparent",color:T.ts,fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}},tr("Clear"))),
+  ycsRes&&h("div",{style:{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:12}},
+    (function(){var src=getStyleImg(ycsRes.style);return src?h("img",{src:src,onClick:function(){openStyleImage(ycsRes.style)},style:{width:40,height:56,objectFit:"cover",borderRadius:6,cursor:"pointer",border:"1px solid "+T.border}}):null})(),
+    h("span",{className:"chip",style:{background:"#eef2ff",color:T.pr,fontFamily:"'JetBrains Mono',monospace",fontWeight:800,fontSize:13}},ycsRes.style),
+    h("span",{style:{fontSize:11.5,color:T.tt,fontWeight:600}},ycsRes.allTime?tr("All time"):ycsRes.from+" \u2192 "+ycsRes.to)),
+  ycsRes&&(ycsRes.loading?h(Loading):ycsRes.error?h(Err,{msg:ycsRes.error}):(!ycsAgg||(!ycsAgg.rows.length&&!ycsAgg.unid.pieces))?h("div",{style:{textAlign:"center",padding:30,color:T.tt,fontSize:13}},tr("No purchases found for this style")):h(React.Fragment,null,
+    h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:12}},
+      [[tr("Unique customers"),fN(ycsSorted.length),"#eef2ff","#4338ca"],[tr("Pieces"),fN(ycsAgg.totPieces),"#fdf4ff","#a21caf"],[tr("Matching tickets"),fN(ycsAgg.totTickets),"#fffbeb","#b45309"],[tr("Sales"),fmt(ycsAgg.totAmount),"#ecfdf5","#047857"]].map(function(cfg,i2){return h("div",{key:i2,style:{background:cfg[2],borderRadius:12,padding:"10px 14px"}},h("div",{style:{fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:1,color:cfg[3],opacity:.75}},cfg[0]),h("div",{style:{fontSize:18,fontWeight:800,color:cfg[3],fontFamily:"'JetBrains Mono',monospace"}},cfg[1]))})),
+    ycsAgg.unid.pieces>0&&h("div",{style:{fontSize:11.5,color:T.am,fontWeight:600,marginBottom:10}},"\u26a0 "+tr("Unidentified (no phone)")+": "+fN(ycsAgg.unid.pieces)+" "+tr("pcs")+" \u00b7 "+fN(ycsAgg.unid.ticketCount)+" tickets \u00b7 "+fmt(ycsAgg.unid.amount)+" \u2014 "+tr("not included in the rows below")),
+    h(DT,{sort:ycsSort,onSort:ycsOnSort,columns:[
+      {header:"",align:"center",render:function(r){return h("span",{onClick:function(){setYcsSel(ycsSel===r.key?null:r.key)},style:{cursor:"pointer",color:T.pr,fontWeight:800,fontSize:14}},ycsSel===r.key?"\u25be":"\u25b8")}},
+      {header:tr("Customer"),sortId:"customer",bold:true,render:function(r){return h("span",{onClick:function(){setYcsSel(ycsSel===r.key?null:r.key)},style:{color:T.pk,cursor:"pointer",fontWeight:700,textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:3}},titleCase(r.Customer||"")||"(no name)")}},
+      {header:tr("Phone"),mono:true,render:function(r){return r.Phone||"\u2014"}},
+      {header:tr("Style"),mono:true,render:function(){return ycsRes.style}},
+      {header:tr("Pieces"),sortId:"pieces",align:"right",mono:true,bold:true,render:function(r){return fN(r.pieces)},color:function(){return T.pu}},
+      {header:tr("Tickets"),sortId:"tickets",align:"center",mono:true,render:function(r){return fN(r.ticketCount)}},
+      {header:tr("Prices paid"),render:function(r){return h("div",{style:{display:"flex",gap:4,flexWrap:"wrap",maxWidth:220}},r.priceList.map(function(pz,i3){return h("span",{key:i3,className:"chip",style:{background:"#f0f4ff",color:T.pr,fontFamily:"'JetBrains Mono',monospace"}},fN(pz.qty)+" \u00d7 $"+fN(pz.price))}))}},
+      {header:tr("Avg price"),sortId:"avg",align:"right",mono:true,render:function(r){return "$"+r.avg.toFixed(2)},color:function(){return T.am}},
+      {header:tr("Spent"),sortId:"amount",align:"right",mono:true,bold:true,render:function(r){return fmt(r.amount)},color:function(){return T.gn}},
+      {header:tr("First Purchase"),sortId:"first",mono:true,render:function(r){return r.first}},
+      {header:tr("Last Purchase"),sortId:"last",mono:true,render:function(r){return r.last}}
+    ],data:ycsSorted}),
+    (function(){
+      if(!ycsSel)return null;
+      var e=null;ycsAgg.rows.forEach(function(r){if(r.key===ycsSel)e=r});
+      if(!e)return null;
+      var lines=e.lines.slice().sort(function(a,b){return a.Fecha<b.Fecha?-1:a.Fecha>b.Fecha?1:(a.Ticket-b.Ticket)});
+      return h("div",{style:{marginTop:14,border:"1.5px solid rgba(99,102,241,.25)",borderRadius:14,padding:16,background:"rgba(99,102,241,.03)"}},
+        h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:10}},
+          h("div",{style:{fontSize:13.5,fontWeight:800}},tr("Purchase details")+" \u2014 "+(titleCase(e.Customer||"")||"(no name)")+" \u00b7 "+ycsRes.style),
+          e.Phone?h("span",{onClick:function(){openCustomer(e.Customer||"\u2014",e.Phone)},style:{color:T.pk,cursor:"pointer",fontWeight:700,fontSize:12,textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:3}},tr("Full purchase history \u2192")):null),
+        h(DT,{columns:[
+          {header:tr("Date"),key:"Fecha",mono:true},
+          {header:tr("Ticket"),mono:true,render:function(l){return h("span",{onClick:function(){openJazminTicket({Fecha:l.Fecha,Ticket:l.Ticket,Phone:e.Phone,Customer:e.Customer})},style:{color:T.pr,cursor:"pointer",fontWeight:700,textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:3}},l.Ticket)}},
+          {header:tr("Code"),key:"Articulo",mono:true},
+          {header:tr("Qty"),align:"right",mono:true,bold:true,render:function(l){return fN(nr(l.Cantidad))}},
+          {header:tr("List"),align:"right",mono:true,render:function(l){var lp=nr(l.Precio),pp=nr(l.Precio_Venta);return lp>pp?h("span",{style:{textDecoration:"line-through",color:T.tt}},"$"+fN(lp)):h("span",{style:{color:T.tt}},lp?"$"+fN(lp):"\u2014")}},
+          {header:tr("Paid"),align:"right",mono:true,bold:true,render:function(l){return "$"+fN(nr(l.Precio_Venta))},color:function(){return T.am}},
+          {header:tr("Line Total"),align:"right",mono:true,bold:true,render:function(l){return fmt(nr(l.Cantidad)*nr(l.Precio_Venta))},color:function(){return T.gn}}
+        ],data:lines}));
+    })()))),
 
   !custView&&yTab==="customers"&&h(Panel,null,
   h(SH,{icon:Ic.Usr,title:tr("All Customers"),sub:tr("All-time · highest first"),action:h(CSVBtn,{rows:(yCustView==="inactive"?yCust.filter(function(c){return c.days>30}):yCust),name:"jazmin_customers"}),gradient:"linear-gradient(135deg,#8b5cf6,#a78bfa)"}),
