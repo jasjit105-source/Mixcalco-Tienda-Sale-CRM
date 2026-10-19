@@ -88,6 +88,12 @@ async function runQuery(query, params={}){
   if(j.status!=="success")throw new Error(j.message||"Query failed");
   return j.data||[];
 }
+function runQueryRetry(query, params={}){
+  return runQuery(query, params).catch(function(e){
+    if(/timeout|did not respond/i.test(String(e&&e.message)))return runQuery(query, params);
+    throw e;
+  });
+}
 function fmtD(d){return d.replace(/-/g,"");}
 /* Local (Mexico City) date helpers — avoid UTC drift from toISOString() */
 function todayLocal(){var d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);}
@@ -160,7 +166,7 @@ currentCosts:(arts)=>"SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) AS Art
 
 firstSeen:()=>"SELECT CustPhone,CONVERT(VARCHAR(10),MIN(FECHA),23) AS FirstDate,COUNT(DISTINCT NO_REFEREN) AS LifetimeTickets FROM MOVS_CIRCUNVALACION WHERE CustPhone IS NOT NULL AND LTRIM(RTRIM(CustPhone))<>'' AND Movimiento='TK' GROUP BY CustPhone",
 
-customerHistory:(d)=>"SELECT Fecha,Store,Ticket,Total_Amount,Items,Vendedor,Tarjetas,PrEnvio,Pago2 FROM(SELECT CONVERT(VARCHAR(10),FECHA,23) AS Fecha,'Circunvalacion' AS Store,NO_REFEREN AS Ticket,ROUND(SUM(Cantidad*Precio_Venta),0) AS Total_Amount,COUNT(*) AS Items,MAX(ISNULL(Vendedor,'')) AS Vendedor,MAX(ISNULL(Tarjetas,'')) AS Tarjetas,MAX(ISNULL(PrEnvio,0)) AS PrEnvio,MAX(ISNULL(PAGO2,'')) AS Pago2 FROM MOVS_CIRCUNVALACION WHERE Movimiento='TK' AND REPLACE(REPLACE(REPLACE(REPLACE(ISNULL(CustPhone,''),' ',''),'-',''),'(',''),')','') LIKE '%"+d+"' GROUP BY CONVERT(VARCHAR(10),FECHA,23),NO_REFEREN UNION ALL SELECT CONVERT(VARCHAR(10),FECHA,23),'Leona Vicario',NO_REFEREN,ROUND(SUM(Cantidad*Precio_Venta),0),COUNT(*),MAX(ISNULL(Vendedor,'')),MAX(ISNULL(Tarjetas,'')),MAX(ISNULL(PrEnvio,0)),MAX(ISNULL(PAGO2,'')) FROM MOVS_LEONA WHERE Movimiento='TK' AND REPLACE(REPLACE(REPLACE(REPLACE(ISNULL(CustPhone,''),' ',''),'-',''),'(',''),')','') LIKE '%"+d+"' GROUP BY CONVERT(VARCHAR(10),FECHA,23),NO_REFEREN)X ORDER BY Fecha DESC,Ticket DESC",
+customerHistoryStore:(d,store)=>{const t=store==="Leona Vicario"?"MOVS_LEONA":"MOVS_CIRCUNVALACION";return "SELECT CONVERT(VARCHAR(10),FECHA,23) AS Fecha,'"+store+"' AS Store,NO_REFEREN AS Ticket,ROUND(SUM(Cantidad*Precio_Venta),0) AS Total_Amount,COUNT(*) AS Items,MAX(ISNULL(Vendedor,'')) AS Vendedor,MAX(ISNULL(Tarjetas,'')) AS Tarjetas,MAX(ISNULL(PrEnvio,0)) AS PrEnvio,MAX(ISNULL(PAGO2,'')) AS Pago2 FROM "+t+" WHERE Movimiento='TK' AND CustPhone IS NOT NULL AND CustPhone<>'' AND (CASE WHEN CustPhone LIKE '%[^0-9]%' THEN REPLACE(REPLACE(REPLACE(REPLACE(CustPhone,' ',''),'-',''),'(',''),')','') ELSE CustPhone END) LIKE '%"+d+"' GROUP BY CONVERT(VARCHAR(10),FECHA,23),NO_REFEREN";},
 
 stockAlerts:()=>"SELECT TOP 500 S.Articulo,S.Total_Stock,S.Cercu,S.Leona,S.Lucum,S.Chinco,S.Bodega,ISNULL(V.Sold,0) AS Sold,ISNULL(D.Costo,0) AS Costo FROM(SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) AS Articulo,SUM(EXISTENCIA) AS Total_Stock,SUM(CASE WHEN Store='Circunvalacion' THEN EXISTENCIA ELSE 0 END) AS Cercu,SUM(CASE WHEN Store='Leona' THEN EXISTENCIA ELSE 0 END) AS Leona,SUM(CASE WHEN Store='Lecumberri' THEN EXISTENCIA ELSE 0 END) AS Lucum,SUM(CASE WHEN Store='Chinconcuac' THEN EXISTENCIA ELSE 0 END) AS Chinco,SUM(CASE WHEN Store='Bodega' THEN EXISTENCIA ELSE 0 END) AS Bodega FROM(SELECT Articulo,EXISTENCIA,'Circunvalacion' AS Store FROM PRODS_C UNION ALL SELECT Articulo,EXISTENCIA,'Leona' FROM PRODS_L UNION ALL SELECT Articulo,EXISTENCIA,'Chinconcuac' FROM PRODS_CHIN UNION ALL SELECT Articulo,EXISTENCIA,'Lecumberri' FROM PRODS_LECU UNION ALL SELECT Articulo,EXISTENCIA,'Bodega' FROM SAP_CC)P GROUP BY LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1))S LEFT JOIN(SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) AS Articulo,SUM(Cantidad) AS Sold FROM(SELECT Articulo,Cantidad FROM MOVS_CIRCUNVALACION WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT Articulo,Cantidad FROM MOVS_LEONA WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT Articulo,Cantidad FROM MOVS_LECUMBERRI WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}') UNION ALL SELECT Articulo,Cantidad FROM MOVS_CHINCONCUAC WHERE Movimiento='TK' AND FECHA>='{{fecha1}}' AND FECHA<DATEADD(DAY,1,'{{fecha2}}'))MV GROUP BY LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1))V ON S.Articulo=V.Articulo LEFT JOIN(SELECT LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1) AS Articulo,ROUND(MAX(Costo),0) AS Costo FROM SAP_CC GROUP BY LEFT(Articulo,CHARINDEX('-',Articulo+'-')-1))D ON S.Articulo=D.Articulo WHERE S.Total_Stock>0 ORDER BY ISNULL(V.Sold,0) ASC,S.Total_Stock DESC",
 
@@ -1294,7 +1300,14 @@ var openCustomer=function(name,phone){
   setCustView({name:name,phone:phone});
   setCustTk(null);
   setCustHist({loading:true,data:null,error:null});
-  runQuery(SQL.customerHistory(d),{}).then(function(r){setCustHist({loading:false,data:r||[],error:null})}).catch(function(e2){setCustHist({loading:false,data:null,error:e2.message})});
+  Promise.all([
+    runQueryRetry(SQL.customerHistoryStore(d,"Circunvalacion"),{}),
+    runQueryRetry(SQL.customerHistoryStore(d,"Leona Vicario"),{})
+  ]).then(function(rr){
+    var rows=(rr[0]||[]).concat(rr[1]||[]);
+    rows.sort(function(a,b){return a.Fecha<b.Fecha?1:a.Fecha>b.Fecha?-1:(nr(b.Ticket)-nr(a.Ticket))});
+    setCustHist({loading:false,data:rows,error:null});
+  }).catch(function(e2){setCustHist({loading:false,data:null,error:e2.message})});
 };
 var openCustTicket=function(row){
   setCustTk({ticket:row.Ticket,store:row.Store,fecha:row.Fecha,loading:true,data:null});
