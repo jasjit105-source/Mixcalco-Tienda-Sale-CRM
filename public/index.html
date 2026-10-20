@@ -854,12 +854,16 @@ function TabBtn({active,label,onClick,count,color}){
   return h("button",{onClick:onClick,style:{padding:"7px 16px",borderRadius:10,border:"none",background:active?bg:"transparent",color:active?"#fff":(color||T.ts),fontSize:12.5,fontWeight:active?700:500,cursor:"pointer",display:"flex",alignItems:"center",gap:6,fontFamily:"inherit",transition:"all .2s",boxShadow:active?"0 3px 12px "+bg+"40":"none"}},label,count!=null&&h("span",{style:{fontSize:9.5,padding:"2px 7px",borderRadius:10,background:active?"rgba(255,255,255,.25)":"#e8ebf0",color:active?"#fff":T.tt,fontWeight:600}},count));
 }
 
-function DT({columns,data,empty,sort,onSort}){
+function DT({columns,data,empty,sort,onSort,onRow,rowKey,expandKey,expandRender}){
   if(!data||!data.length)return h("div",{style:{textAlign:"center",padding:44,color:T.tt,fontSize:13}},empty||"No data");
   return h("div",{style:{overflowX:"auto",borderRadius:14,border:"1px solid "+T.border,background:"rgba(255,255,255,.6)"}},
     h("table",null,
       h("thead",null,h("tr",null,columns.map(function(c,i){var srt=onSort&&c.sortId;return h("th",{key:i,onClick:srt?function(){onSort(c.sortId)}:undefined,style:{padding:"12px 16px",textAlign:c.align||"left",color:T.pr,fontWeight:700,fontSize:10.5,textTransform:"uppercase",letterSpacing:.8,background:"linear-gradient(135deg,#f8faff,#f0f4ff)",borderBottom:"2px solid rgba(99,102,241,.1)",whiteSpace:"nowrap",cursor:srt?"pointer":undefined,userSelect:srt?"none":undefined}},c.header,srt&&sort&&sort.key===c.sortId?(sort.dir<0?" ↓":" ↑"):"")}))),
-      h("tbody",null,data.map(function(row,ri){return h("tr",{key:ri,className:"hr",style:{background:ri%2===1?"rgba(99,102,241,.02)":"transparent"}},columns.map(function(c,ci){return h("td",{key:ci,style:{padding:"10px 16px",borderBottom:"1px solid "+T.bL,color:c.color?c.color(row):T.tx,textAlign:c.align||"left",fontWeight:c.bold?600:400,fontFamily:c.mono?"'JetBrains Mono',monospace":"inherit",whiteSpace:"nowrap",fontSize:12.5}},c.render?c.render(row,ri):row[c.key])}))}))));
+      h("tbody",null,data.map(function(row,ri){
+        var tr1=h("tr",{key:"r"+ri,className:"hr",onClick:onRow?function(){onRow(row)}:undefined,style:{background:ri%2===1?"rgba(99,102,241,.02)":"transparent",cursor:onRow?"pointer":undefined}},columns.map(function(c,ci){return h("td",{key:ci,style:{padding:"10px 16px",borderBottom:"1px solid "+T.bL,color:c.color?c.color(row):T.tx,textAlign:c.align||"left",fontWeight:c.bold?600:400,fontFamily:c.mono?"'JetBrains Mono',monospace":"inherit",whiteSpace:"nowrap",fontSize:12.5}},c.render?c.render(row,ri):row[c.key])}));
+        if(expandRender&&rowKey&&expandKey!=null&&rowKey(row)===expandKey)return h(React.Fragment,{key:"f"+ri},tr1,h("tr",{key:"x"+ri},h("td",{colSpan:columns.length,style:{padding:0,borderBottom:"1px solid "+T.bL}},expandRender(row))));
+        return tr1;
+      }))));
 }
 
 var imgCol={header:"",render:function(r){var art=r.Item_Code||r.Articulo||r.art||"";var clean=art.replace(/-.*$/,"");var src=getStyleImg(clean);return src?h("img",{src:src,loading:"lazy",onClick:function(){openStyleImage(clean)},style:{width:48,height:68,objectFit:"cover",borderRadius:6,cursor:"pointer",transition:"transform .2s",border:"2px solid transparent",boxShadow:"0 1px 3px rgba(0,0,0,.08)"},onMouseEnter:function(e){e.target.style.transform="scale(2)";e.target.style.border="2px solid #818cf8";e.target.style.zIndex="10";e.target.style.position="relative"},onMouseLeave:function(e){e.target.style.transform="";e.target.style.border="2px solid transparent";e.target.style.zIndex="";e.target.style.position=""}}):h("div",{style:{width:48,height:68,background:"#f1f5f9",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:"#94a3b8"}},"—")},align:"center"};
@@ -1441,6 +1445,22 @@ var ycsSorted=useMemo(function(){
   });
   return arr;
 },[ycsAgg,ycsSort]);
+var ycsExpand=function(e){
+  var lines=e.lines.slice().sort(function(a,b){return a.Fecha<b.Fecha?-1:a.Fecha>b.Fecha?1:(a.Ticket-b.Ticket)});
+  return h("div",{style:{padding:"12px 16px 16px",background:"rgba(99,102,241,.04)"}},
+    h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:8}},
+      h("div",{style:{fontSize:13,fontWeight:800}},tr("Purchase details")+" \u2014 "+(titleCase(e.Customer||"")||"(no name)")+" \u00b7 "+(ycsRes?ycsRes.style:"")),
+      e.Phone?h("span",{onClick:function(ev){ev.stopPropagation();openCustomer(e.Customer||"\u2014",e.Phone)},style:{color:T.pk,cursor:"pointer",fontWeight:700,fontSize:12,textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:3}},tr("Full purchase history \u2192")):null),
+    h(DT,{columns:[
+      {header:tr("Date"),key:"Fecha",mono:true},
+      {header:tr("Ticket"),mono:true,render:function(l){return h("span",{onClick:function(ev){ev.stopPropagation();openJazminTicket({Fecha:l.Fecha,Ticket:l.Ticket,Phone:e.Phone,Customer:e.Customer})},style:{color:T.pr,cursor:"pointer",fontWeight:700,textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:3}},l.Ticket)}},
+      {header:tr("Code"),key:"Articulo",mono:true},
+      {header:tr("Qty"),align:"right",mono:true,bold:true,render:function(l){return fN(nr(l.Cantidad))}},
+      {header:tr("List"),align:"right",mono:true,render:function(l){var lp=nr(l.Precio),pp=nr(l.Precio_Venta);return lp>pp?h("span",{style:{textDecoration:"line-through",color:T.tt}},"$"+fN(lp)):h("span",{style:{color:T.tt}},lp?"$"+fN(lp):"\u2014")}},
+      {header:tr("Paid"),align:"right",mono:true,bold:true,render:function(l){return "$"+fN(nr(l.Precio_Venta))},color:function(){return T.am}},
+      {header:tr("Line Total"),align:"right",mono:true,bold:true,render:function(l){return fmt(nr(l.Cantidad)*nr(l.Precio_Venta))},color:function(){return T.gn}}
+    ],data:lines}));
+};
 var ycsCsvRows=function(){
   if(!ycsAgg||!ycsRes)return[];
   var per=ycsRes.allTime?"All time":(ycsRes.from+" to "+ycsRes.to);
@@ -1523,6 +1543,24 @@ var acToggle=function(e){
       setAcHist(function(pv){var n2=Object.assign({},pv);n2[p2]={loading:false,error:e2.message};return n2;});
     });
   }
+};
+var acExpand=function(e){
+  var hs=acHist[e.key]||{};
+  return h("div",{style:{padding:"12px 16px 16px",background:"rgba(14,165,233,.04)"}},
+    h("div",{style:{fontSize:13,fontWeight:800,marginBottom:8}},"Purchase History \u2014 "+(titleCase(e.Customer||"")||"(no name)")+" \u00b7 "+e.Phone),
+    hs.loading?h(Loading):hs.error?h(Err,{msg:hs.error}):h(React.Fragment,null,
+      (function(){var tk={},pc=0,am=0;(hs.rows||[]).forEach(function(l){tk[l.Ticket]=1;pc+=nr(l.Cantidad);am+=nr(l.Cantidad)*nr(l.Precio_Venta);});return h("div",{style:{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}},[fN(Object.keys(tk).length)+" tickets",fN(pc)+" pcs",fmt(am)].map(function(t2,i3){return h("span",{key:i3,className:"chip",style:{background:"#eef2ff",color:T.pr,fontWeight:700}},t2)}));})(),
+      h(DT,{columns:[
+        imgCol,
+        {header:"Date",key:"Fecha",mono:true},
+        {header:"Store",key:"Store"},
+        {header:"Ticket",key:"Ticket",mono:true,bold:true},
+        {header:"Article",render:function(l){return h("div",null,h("div",{style:{fontFamily:"'JetBrains Mono',monospace",fontWeight:700,fontSize:12}},l.Articulo),l.Descripcion?h("div",{style:{fontSize:10,color:T.tt}},String(l.Descripcion).slice(0,40)):null)}},
+        {header:"Qty",align:"right",mono:true,bold:true,render:function(l){return fN(nr(l.Cantidad))}},
+        {header:"Price",align:"right",mono:true,render:function(l){return "$"+fN(nr(l.Precio_Venta))}},
+        {header:"Line Total",align:"right",mono:true,bold:true,render:function(l){return fmt(nr(l.Cantidad)*nr(l.Precio_Venta))},color:function(){return T.gn}},
+        {header:"Seller",render:function(l){return mapAgent(l.Store,String(l.Vendedor||"").trim())||"\u2014"}}
+      ],data:hs.rows||[],empty:"No tickets found"})));
 };
 var acCsvRows=function(){
   return acList.map(function(e){return{Customer:titleCase(e.Customer||"")||"(no name)",Phone:e.Phone,Stores:e.storeList.join(" | "),Agents:e.agentList.join(" | "),Tickets:e.Tickets,Total:Math.round(e.Amount),First_Purchase:e.First,Last_Purchase:e.Last}});
@@ -1632,9 +1670,9 @@ tab==="allcust"&&h(Panel,null,
   (qAC1.loading||qAC2.loading||qAC3.loading)?h(Loading):(qAC1.error||qAC2.error||qAC3.error)?h(Err,{msg:qAC1.error||qAC2.error||qAC3.error}):h(React.Fragment,null,
     h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:12}},
       [["Customers",fN(acList.length),"#eef2ff","#4338ca"],["Tickets",fN(acList.reduce(function(s2,e){return s2+e.Tickets},0)),"#fffbeb","#b45309"],["Total Sales",fmt(acList.reduce(function(s2,e){return s2+e.Amount},0)),"#ecfdf5","#047857"]].map(function(cfg,i2){return h("div",{key:i2,style:{background:cfg[2],borderRadius:12,padding:"10px 14px"}},h("div",{style:{fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:1,color:cfg[3],opacity:.75}},cfg[0]),h("div",{style:{fontSize:18,fontWeight:800,color:cfg[3],fontFamily:"'JetBrains Mono',monospace"}},cfg[1]))})),
-    h(DT,{sort:acSort,onSort:acOnSort,columns:[
-      {header:"",align:"center",render:function(r){return h("span",{onClick:function(){acToggle(r)},style:{cursor:"pointer",color:T.pr,fontWeight:800,fontSize:14}},acSel===r.key?"\u25be":"\u25b8")}},
-      {header:"Customer",sortId:"customer",bold:true,render:function(r){return h("span",{onClick:function(){acToggle(r)},style:{color:T.pk,cursor:"pointer",fontWeight:700,textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:3}},titleCase(r.Customer||"")||"(no name)")}},
+    h(DT,{sort:acSort,onSort:acOnSort,onRow:acToggle,rowKey:function(r){return r.key},expandKey:acSel,expandRender:acExpand,columns:[
+      {header:"",align:"center",render:function(r){return h("span",{style:{color:T.pr,fontWeight:800,fontSize:14}},acSel===r.key?"\u25be":"\u25b8")}},
+      {header:"Customer",sortId:"customer",bold:true,render:function(r){return h("span",{style:{color:T.pk,fontWeight:700,textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:3}},titleCase(r.Customer||"")||"(no name)")}},
       {header:"Phone",key:"Phone",mono:true},
       {header:"Store",render:function(r){return h("div",{style:{display:"flex",gap:4,flexWrap:"wrap"}},r.storeList.map(function(s2,i3){return h("span",{key:i3,className:"chip",style:{background:s2==="Circunvalacion"?"#eef2ff":s2==="Leona Vicario"?"#fdf2f8":"#f0fdfa",color:s2==="Circunvalacion"?T.pr:s2==="Leona Vicario"?T.pk:"#0f766e"}},s2)}))}},
       {header:"Agents",render:function(r){return h("div",{style:{display:"flex",gap:4,flexWrap:"wrap",maxWidth:200}},r.agentList.map(function(a,i3){return h("span",{key:i3,className:"chip",style:{background:"#f8fafc",color:T.ts,border:"1px solid "+T.bL}},a)}))}},
@@ -1643,26 +1681,7 @@ tab==="allcust"&&h(Panel,null,
       {header:"First Purchase",sortId:"first",key:"First",mono:true},
       {header:"Last Purchase",sortId:"last",key:"Last",mono:true}
     ],data:acList}),
-    acSel&&(function(){
-      var e=null;acList.forEach(function(r){if(r.key===acSel)e=r});
-      if(!e)return null;
-      var hs=acHist[acSel]||{};
-      return h("div",{style:{marginTop:14,border:"1.5px solid rgba(14,165,233,.3)",borderRadius:14,padding:16,background:"rgba(14,165,233,.03)"}},
-        h("div",{style:{fontSize:13.5,fontWeight:800,marginBottom:10}},"Purchase History \u2014 "+(titleCase(e.Customer||"")||"(no name)")+" \u00b7 "+e.Phone),
-        hs.loading?h(Loading):hs.error?h(Err,{msg:hs.error}):h(React.Fragment,null,
-          (function(){var tk={},pc=0,am=0;(hs.rows||[]).forEach(function(l){tk[l.Ticket]=1;pc+=nr(l.Cantidad);am+=nr(l.Cantidad)*nr(l.Precio_Venta);});return h("div",{style:{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}},[fN(Object.keys(tk).length)+" tickets",fN(pc)+" pcs",fmt(am)].map(function(t2,i3){return h("span",{key:i3,className:"chip",style:{background:"#eef2ff",color:T.pr,fontWeight:700}},t2)}));})(),
-          h(DT,{columns:[
-            imgCol,
-            {header:"Date",key:"Fecha",mono:true},
-            {header:"Store",key:"Store"},
-            {header:"Ticket",key:"Ticket",mono:true,bold:true},
-            {header:"Article",render:function(l){return h("div",null,h("div",{style:{fontFamily:"'JetBrains Mono',monospace",fontWeight:700,fontSize:12}},l.Articulo),l.Descripcion?h("div",{style:{fontSize:10,color:T.tt}},String(l.Descripcion).slice(0,40)):null)}},
-            {header:"Qty",align:"right",mono:true,bold:true,render:function(l){return fN(nr(l.Cantidad))}},
-            {header:"Price",align:"right",mono:true,render:function(l){return "$"+fN(nr(l.Precio_Venta))}},
-            {header:"Line Total",align:"right",mono:true,bold:true,render:function(l){return fmt(nr(l.Cantidad)*nr(l.Precio_Venta))},color:function(){return T.gn}},
-            {header:"Seller",render:function(l){return mapAgent(l.Store,String(l.Vendedor||"").trim())||"\u2014"}}
-          ],data:hs.rows||[],empty:"No tickets found"})));
-    })())),
+    )),
 
 tab==="yazmin"&&h(React.Fragment,null,
   h(Panel,{style:{marginBottom:20}},h(SH,{icon:Ic.Usr,title:"Jazmin \u2014 E-Commerce & CRM",sub:tr("Sales, clients, commissions"),gradient:"linear-gradient(135deg,#ec4899,#f472b6)"}),
@@ -1736,9 +1755,9 @@ tab==="yazmin"&&h(React.Fragment,null,
     h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:12}},
       [[tr("Unique customers"),fN(ycsSorted.length),"#eef2ff","#4338ca"],[tr("Pieces"),fN(ycsAgg.totPieces),"#fdf4ff","#a21caf"],[tr("Matching tickets"),fN(ycsAgg.totTickets),"#fffbeb","#b45309"],[tr("Sales"),fmt(ycsAgg.totAmount),"#ecfdf5","#047857"]].map(function(cfg,i2){return h("div",{key:i2,style:{background:cfg[2],borderRadius:12,padding:"10px 14px"}},h("div",{style:{fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:1,color:cfg[3],opacity:.75}},cfg[0]),h("div",{style:{fontSize:18,fontWeight:800,color:cfg[3],fontFamily:"'JetBrains Mono',monospace"}},cfg[1]))})),
     ycsAgg.unid.pieces>0&&h("div",{style:{fontSize:11.5,color:T.am,fontWeight:600,marginBottom:10}},"\u26a0 "+tr("Unidentified (no phone)")+": "+fN(ycsAgg.unid.pieces)+" "+tr("pcs")+" \u00b7 "+fN(ycsAgg.unid.ticketCount)+" tickets \u00b7 "+fmt(ycsAgg.unid.amount)+" \u2014 "+tr("not included in the rows below")),
-    h(DT,{sort:ycsSort,onSort:ycsOnSort,columns:[
-      {header:"",align:"center",render:function(r){return h("span",{onClick:function(){setYcsSel(ycsSel===r.key?null:r.key)},style:{cursor:"pointer",color:T.pr,fontWeight:800,fontSize:14}},ycsSel===r.key?"\u25be":"\u25b8")}},
-      {header:tr("Customer"),sortId:"customer",bold:true,render:function(r){return h("span",{onClick:function(){setYcsSel(ycsSel===r.key?null:r.key)},style:{color:T.pk,cursor:"pointer",fontWeight:700,textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:3}},titleCase(r.Customer||"")||"(no name)")}},
+    h(DT,{sort:ycsSort,onSort:ycsOnSort,onRow:function(r){setYcsSel(ycsSel===r.key?null:r.key)},rowKey:function(r){return r.key},expandKey:ycsSel,expandRender:ycsExpand,columns:[
+      {header:"",align:"center",render:function(r){return h("span",{style:{color:T.pr,fontWeight:800,fontSize:14}},ycsSel===r.key?"\u25be":"\u25b8")}},
+      {header:tr("Customer"),sortId:"customer",bold:true,render:function(r){return h("span",{style:{color:T.pk,fontWeight:700,textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:3}},titleCase(r.Customer||"")||"(no name)")}},
       {header:tr("Phone"),mono:true,render:function(r){return r.Phone||"\u2014"}},
       {header:tr("Style"),mono:true,render:function(){return ycsRes.style}},
       {header:tr("Pieces"),sortId:"pieces",align:"right",mono:true,bold:true,render:function(r){return fN(r.pieces)},color:function(){return T.pu}},
@@ -1749,25 +1768,7 @@ tab==="yazmin"&&h(React.Fragment,null,
       {header:tr("First Purchase"),sortId:"first",mono:true,render:function(r){return r.first}},
       {header:tr("Last Purchase"),sortId:"last",mono:true,render:function(r){return r.last}}
     ],data:ycsSorted}),
-    (function(){
-      if(!ycsSel)return null;
-      var e=null;ycsAgg.rows.forEach(function(r){if(r.key===ycsSel)e=r});
-      if(!e)return null;
-      var lines=e.lines.slice().sort(function(a,b){return a.Fecha<b.Fecha?-1:a.Fecha>b.Fecha?1:(a.Ticket-b.Ticket)});
-      return h("div",{style:{marginTop:14,border:"1.5px solid rgba(99,102,241,.25)",borderRadius:14,padding:16,background:"rgba(99,102,241,.03)"}},
-        h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:10}},
-          h("div",{style:{fontSize:13.5,fontWeight:800}},tr("Purchase details")+" \u2014 "+(titleCase(e.Customer||"")||"(no name)")+" \u00b7 "+ycsRes.style),
-          e.Phone?h("span",{onClick:function(){openCustomer(e.Customer||"\u2014",e.Phone)},style:{color:T.pk,cursor:"pointer",fontWeight:700,fontSize:12,textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:3}},tr("Full purchase history \u2192")):null),
-        h(DT,{columns:[
-          {header:tr("Date"),key:"Fecha",mono:true},
-          {header:tr("Ticket"),mono:true,render:function(l){return h("span",{onClick:function(){openJazminTicket({Fecha:l.Fecha,Ticket:l.Ticket,Phone:e.Phone,Customer:e.Customer})},style:{color:T.pr,cursor:"pointer",fontWeight:700,textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:3}},l.Ticket)}},
-          {header:tr("Code"),key:"Articulo",mono:true},
-          {header:tr("Qty"),align:"right",mono:true,bold:true,render:function(l){return fN(nr(l.Cantidad))}},
-          {header:tr("List"),align:"right",mono:true,render:function(l){var lp=nr(l.Precio),pp=nr(l.Precio_Venta);return lp>pp?h("span",{style:{textDecoration:"line-through",color:T.tt}},"$"+fN(lp)):h("span",{style:{color:T.tt}},lp?"$"+fN(lp):"\u2014")}},
-          {header:tr("Paid"),align:"right",mono:true,bold:true,render:function(l){return "$"+fN(nr(l.Precio_Venta))},color:function(){return T.am}},
-          {header:tr("Line Total"),align:"right",mono:true,bold:true,render:function(l){return fmt(nr(l.Cantidad)*nr(l.Precio_Venta))},color:function(){return T.gn}}
-        ],data:lines}));
-    })()))),
+    ))),
 
   !custView&&yTab==="customers"&&h(Panel,null,
   h(SH,{icon:Ic.Usr,title:tr("All Customers"),sub:tr("All-time · highest first"),action:h(CSVBtn,{rows:(yCustView==="inactive"?yCust.filter(function(c){return c.days>30}):yCust),name:"jazmin_customers"}),gradient:"linear-gradient(135deg,#8b5cf6,#a78bfa)"}),
