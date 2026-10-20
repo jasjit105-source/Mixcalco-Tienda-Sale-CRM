@@ -16,6 +16,7 @@ const CASES = [
   ["storeSummary", SQL.storeSummary(), { fecha: D }],
   ["tickets", SQL.tickets(null, "Leona Vicario"), { fecha: D }],
   ["ticketDetail", SQL.ticketDetail(null, "121234", "Leona Vicario"), { fecha: D }],
+  ["ticketDetailNoCust", SQL.ticketDetail(null, "1", "Lucumberri"), { fecha: D }],
   ["topItems", SQL.topItems(), { fecha: D }],
   ["deposits", SQL.deposits(), { fecha: D }],
   ["transfersByBank", SQL.transfersByBank(), { fecha: D }],
