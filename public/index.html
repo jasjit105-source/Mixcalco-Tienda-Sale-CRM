@@ -1594,6 +1594,47 @@ var acExpand=function(e){
         {header:"Seller",render:function(l){return mapAgent(l.Store,String(l.Vendedor||"").trim())||"\u2014"}}
       ],data:hrows,empty:"No tickets found"})));
 };
+var acPdf=function(){
+  var isStyle=!!acStyleRes;
+  var filt=[];
+  if(isStyle)filt.push("Style "+acStyleRes.style);
+  if(acStore!=="all")filt.push(acStore);
+  if(acAgent!=="all")filt.push("Agent: "+acAgent);
+  if(acSearch.trim())filt.push('"'+acSearch.trim()+'"');
+  var totP=0,totT=0,totA=0;
+  acList.forEach(function(e){totP+=(e.Pieces||0);totT+=e.Tickets;totA+=e.Amount});
+  var html='<html><head><meta charset="utf-8"><title>Customer Directory</title><style>'+
+    'body{font-family:Arial,sans-serif;margin:36px;color:#1e1b4b}'+
+    '.header{text-align:center;margin-bottom:24px;padding-bottom:16px;border-bottom:3px solid #0ea5e9}'+
+    '.header h1{font-size:22px;color:#0ea5e9;margin:0 0 4px}'+
+    '.header p{font-size:12px;color:#64748b;margin:4px 0 0}'+
+    '.summary{display:flex;gap:16px;margin-bottom:20px;justify-content:center;flex-wrap:wrap}'+
+    '.card{padding:12px 22px;border-radius:12px;text-align:center;min-width:110px}'+
+    '.card .label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;color:#64748b}'+
+    '.card .value{font-size:20px;font-weight:800}'+
+    '.c1{background:#eef2ff}.c2{background:#fdf4ff}.c3{background:#fffbeb}.c4{background:#ecfdf5}'+
+    'table{width:100%;border-collapse:collapse;font-size:11px}'+
+    'th{background:#0ea5e9;color:#fff;padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px}'+
+    'td{padding:6px 8px;border-bottom:1px solid #e2e8f0}'+
+    'tr:nth-child(even) td{background:#f8fafc}'+
+    '.r{text-align:right}.c{text-align:center}'+
+    '@media print{body{margin:14px}}'+
+    '</style></head><body>'+
+    '<div class="header"><h1>Sahiba Centro \u2014 Customer Directory</h1>'+
+    '<p>'+(filt.length?filt.join(" \u00b7 "):"All stores \u00b7 All agents")+' \u00b7 Generated '+todayLocal()+'</p></div>'+
+    '<div class="summary">'+
+    '<div class="card c1"><div class="label">Customers</div><div class="value">'+fN(acList.length)+'</div></div>'+
+    (isStyle?'<div class="card c2"><div class="label">Pieces</div><div class="value">'+fN(totP)+'</div></div>':'')+
+    '<div class="card c3"><div class="label">Tickets</div><div class="value">'+fN(totT)+'</div></div>'+
+    '<div class="card c4"><div class="label">Total</div><div class="value">'+fmt(totA)+'</div></div></div>'+
+    '<table><thead><tr><th>#</th><th>Customer</th><th>Phone</th><th>Store</th><th>Agents</th>'+(isStyle?'<th class="r">Pieces</th>':'')+'<th class="c">Tickets</th><th class="r">Total</th><th>First</th><th>Last</th></tr></thead><tbody>';
+  acList.forEach(function(e,i){
+    html+='<tr><td>'+(i+1)+'</td><td><b>'+(titleCase(e.Customer||"")||"(no name)")+'</b></td><td>'+(e.Phone||"")+'</td><td>'+e.storeList.join(", ")+'</td><td>'+e.agentList.join(", ")+'</td>'+(isStyle?'<td class="r"><b>'+fN(e.Pieces||0)+'</b></td>':'')+'<td class="c">'+fN(e.Tickets)+'</td><td class="r"><b>'+fmt(e.Amount)+'</b></td><td>'+e.First+'</td><td>'+e.Last+'</td></tr>';
+  });
+  html+='</tbody></table></body></html>';
+  var w2=window.open("","_blank");
+  if(w2){w2.document.write(html);w2.document.close();setTimeout(function(){w2.print()},500);}
+};
 var acCsvRows=function(){
   return acList.map(function(e){
     var row={Customer:titleCase(e.Customer||"")||"(no name)",Phone:e.Phone,Stores:e.storeList.join(" | "),Agents:e.agentList.join(" | ")};
@@ -1716,7 +1757,9 @@ tab==="items"&&h(Panel,null,h(SH,{icon:Ic.Bar,title:"Top 20 Items",sub:"Date: "+
 
 // YAZMIN CRM
 tab==="allcust"&&h(Panel,null,
-  h(SH,{icon:Ic.Usr,title:"Customer Directory",sub:"All customers across stores \u00b7 filter by store and agent",gradient:"linear-gradient(135deg,#0ea5e9,#38bdf8)",action:(acList.length?h("button",{onClick:function(){downloadCSV((acStyleRes?("style_"+acStyleRes.style+"_"):"")+"customers_"+(acStore==="all"?"all_stores":acStore.replace(/ /g,"_"))+"_"+(acAgent==="all"?"all_agents":acAgent),acCsvRows())},style:{padding:"7px 14px",borderRadius:10,border:"1px solid "+T.border,background:"rgba(16,185,129,.08)",color:T.gn,fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}},"\u2913 CSV"):null)}),
+  h(SH,{icon:Ic.Usr,title:"Customer Directory",sub:"All customers across stores \u00b7 filter by store and agent",gradient:"linear-gradient(135deg,#0ea5e9,#38bdf8)",action:(acList.length?h("div",{style:{display:"flex",gap:6}},
+    h("button",{onClick:function(){downloadCSV((acStyleRes?("style_"+acStyleRes.style+"_"):"")+"customers_"+(acStore==="all"?"all_stores":acStore.replace(/ /g,"_"))+"_"+(acAgent==="all"?"all_agents":acAgent),acCsvRows())},style:{padding:"7px 14px",borderRadius:10,border:"1px solid "+T.border,background:"rgba(16,185,129,.08)",color:T.gn,fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}},"\u2913 CSV"),
+    h("button",{onClick:function(){acPdf()},style:{padding:"7px 14px",borderRadius:10,border:"none",background:"#dc2626",color:"#fff",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}},"\ud83d\udcc4 PDF")):null)}),
   h("div",{style:{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:14}},
     ["all","Circunvalacion","Leona Vicario","Izazaga"].map(function(s2){return h(TabBtn,{key:s2,active:acStore===s2,label:s2==="all"?"All stores":s2,onClick:function(){setAcStore(s2);setAcAgent("all");setAcSel(null)}})}),
     h("select",{value:acAgent,onChange:function(ev){setAcAgent(ev.target.value);setAcSel(null)},style:{padding:"8px 12px",border:"1.5px solid "+T.border,borderRadius:10,fontSize:12.5,fontWeight:700,fontFamily:"inherit",color:T.tx,background:"#fff",outline:"none",cursor:"pointer"}},
