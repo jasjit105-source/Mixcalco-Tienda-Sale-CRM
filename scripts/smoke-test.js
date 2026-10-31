@@ -15,6 +15,8 @@ const D1 = "20260714", D2 = "20260721", D = "20260721";
 const CASES = [
   ["storeSummary", SQL.storeSummary(), { fecha: D }],
   ["tickets", SQL.tickets(null, "Leona Vicario"), { fecha: D }],
+  ["ticketsJazmin", SQL.tickets(null, "Jazmin"), { fecha: D }],
+  ["ticketsCercu", SQL.tickets(null, "Circunvalacion"), { fecha: D }],
   ["ticketDetail", SQL.ticketDetail(null, "121234", "Leona Vicario"), { fecha: D }],
   ["ticketDetailNoCust", SQL.ticketDetail(null, "1", "Lucumberri"), { fecha: D }],
   ["topItems", SQL.topItems(), { fecha: D }],
