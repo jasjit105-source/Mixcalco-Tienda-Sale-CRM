@@ -1540,7 +1540,14 @@ var acList=useMemo(function(){
   });
   var q2=acSearch.trim().toLowerCase();
   var arr=Object.keys(m).map(function(k2){var e=m[k2];e.storeList=Object.keys(e.stores);e.agentList=Object.keys(e.agents);return e;});
-  if(q2)arr=arr.filter(function(e){return String(e.Customer||"").toLowerCase().indexOf(q2)>=0||String(e.Phone||"").indexOf(q2)>=0});
+  var ndig=function(x){x=String(x||"").replace(/\D/g,"");if(x.length>=11&&x.indexOf("52")===0)x=x.slice(-10);return x;};
+  var qd=ndig(q2);
+  if(q2)arr=arr.filter(function(e){
+    if(String(e.Customer||"").toLowerCase().indexOf(q2)>=0)return true;
+    if(String(e.Phone||"").indexOf(q2)>=0)return true;
+    if(qd.length>=7){var pd=ndig(e.Phone);if(pd&&(pd.indexOf(qd)>=0||qd.indexOf(pd)>=0))return true;}
+    return false;
+  });
   var k3=acSort.key,dd=acSort.dir;
   arr.sort(function(a,b){
     if(k3==="customer"||k3==="first"||k3==="last"){
